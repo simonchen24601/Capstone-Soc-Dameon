@@ -1,6 +1,7 @@
 #include "app.h"
 #include <chrono>
 #include <thread>
+#include "peripheralbroker.h"
 
 App::App()
     : logger_{LoggerFactory::get_instance()->get_logger(LOGGER_NAME_)}
@@ -16,17 +17,23 @@ void App::run()
 
     auto handle_event = [&](int event) {
         switch(event) {
-            case EVENT_READ_MCU_SENSOR: {
-                read_mcu_sensor();
-                time_event_queue_.push({
-                    std::chrono::steady_clock::now() + std::chrono::seconds(5), 
-                    EVENT_READ_MCU_SENSOR});
+            case EVENT_MCU_HEARTBEAT_TIMEOUT: {
+                logger_->critical("MCU heartbeat timeout");
             }; break;
-            case EVENT_READ_CAMERA_IMAGE: {
-                read_camera_imge();
+            case EVENT_MCU_MOTION_SENSOR_TRIGGERED: {
+                handle_motion_sensor_triggered();
+                // time_event_queue_.push({
+                //     std::chrono::steady_clock::now() + std::chrono::seconds(10), 
+                //     EVENT_MCU_MOTION_SENSOR_TRIGGERED});
+            }; break;
+            case EVENT_MCU_TEMPRATURE_SENSOR_READ: {
+                handle_mcu_sensor_read();
                 time_event_queue_.push({
-                    std::chrono::steady_clock::now() + std::chrono::seconds(10), 
-                    EVENT_READ_CAMERA_IMAGE});
+                    std::chrono::steady_clock::now() + std::chrono::seconds(TEMPRATURE_SENSOR_READ_INTERVAL_SEC_), 
+                    EVENT_MCU_TEMPRATURE_SENSOR_READ});
+            }; break;
+            case EVENT_MCU_PROXIMITY_SENSOR_TRIGGERED: {
+                handle_proximity_sensor_triggered();
             }; break;
             default:
                 break;
@@ -55,8 +62,8 @@ void App::run()
         }
     };
 
-    event_queue_.push(EVENT_READ_MCU_SENSOR);
-    event_queue_.push(EVENT_READ_CAMERA_IMAGE);
+    event_queue_.push(EVENT_MCU_TEMPRATURE_SENSOR_READ);
+    event_queue_.push(EVENT_MCU_MOTION_SENSOR_TRIGGERED);
     logger_->info("main event loop begin");
     while(!exit_flag_) {
         busy_flag = false;
@@ -80,12 +87,46 @@ void App::stop()
     exit_flag_ = true;
 }
 
-void App::read_mcu_sensor()
+void App::handle_mcu_timeout()
 {
-    logger_->info(__func__);
+    logger_->info("%s not implemented", __func__);
 }
 
-void App::read_camera_imge()
+void App::handle_mcu_sensor_read()
 {
-    logger_->info(__func__);
+    logger_->info("%s not implemented", __func__);
+}
+
+void App::handle_motion_sensor_triggered()
+{
+    logger_->info("%s not implemented", __func__);
+}
+
+void App::handle_proximity_sensor_triggered()
+{
+    logger_->info("%s not implemented", __func__);
+}
+
+void App::handle_server_streaming_begin()
+{
+    auto peripheral_broker = PeripheralBroker::get_instance();
+    int ret = peripheral_broker->start_camera_streaming();
+    if(ret != PERIPHERAL_STATUS_OK) {
+        logger_->error("failed to start camera streaming");
+    }
+    else {
+        logger_->info("camera streaming started");
+    }
+}
+
+void App::handle_server_streaming_end()
+{
+    auto peripheral_broker = PeripheralBroker::get_instance();
+    int ret = peripheral_broker->stop_camera_streaming();
+    if(ret != PERIPHERAL_STATUS_OK) {
+        logger_->error("failed to stop camera streaming");
+    }
+    else {
+        logger_->info("camera streaming stopped");
+    }
 }

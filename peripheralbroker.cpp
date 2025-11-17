@@ -73,6 +73,33 @@ int PeripheralBroker::get_camera_status()
     return PERIPHERAL_STATUS_OK;
 }
 
+int PeripheralBroker::start_camera_streaming()
+{
+    if (!dev_camera_) {
+        return PERIPHERAL_STATUS_NOT_SUPPORTED;
+    }
+    dev_camera_->start_stream_async();
+    return PERIPHERAL_STATUS_OK;
+}
+
+int PeripheralBroker::stop_camera_streaming()
+{
+    if (!dev_camera_) {
+        return PERIPHERAL_STATUS_NOT_SUPPORTED;
+    }
+    dev_camera_->stop_stream_async();
+    return PERIPHERAL_STATUS_OK;
+}
+
+int PeripheralBroker::get_camera_image()
+{
+    if (!dev_camera_) {
+        return PERIPHERAL_STATUS_NOT_SUPPORTED;
+    }
+    dev_camera_->get_image();
+    return PERIPHERAL_STATUS_OK;
+}
+
 int PeripheralBroker::init_mcu()
 {
     return get_mcu_status();

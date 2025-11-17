@@ -49,7 +49,14 @@ public:
 
     PeripheralBroker();
     int init_all();
+
+    // camera interfaces
     int get_camera_status();
+    int start_camera_streaming();
+    int stop_camera_streaming();
+    int get_camera_image();
+
+    // mcu interfaces
     // int get_micophone_status();
     int get_mcu_status();
     int get_motor_driver_status();
