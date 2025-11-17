@@ -414,6 +414,7 @@ int PeripheralBroker::init_camera()
     dev_camera_ = std::make_shared<CameraMicrophoneInterface>();
     auto config = ConfigService::get_instance();
     dev_camera_->init(config->camera_device_, config->camera_width_, config->camera_height_, config->camera_framerate_);
+    dev_camera_->get_image();
     return get_camera_status();
 }
 
