@@ -20,21 +20,10 @@ set(CMAKE_CXX_RELEASE_FLAGS -O2 ${CMAKE_CXX_RELEASE_FLAGS})
 
 set(CMAKE_PROJECT_NAME capstone_soc_dameon)
 
-set(APP_SOURCES
-    util.hpp
-    main.cpp
-    ini.h
-    ini.c
-    INIReader.h
-    INIReader.cpp
-    configservice.h
-    configservice.cpp
-    interface.h
-    interface.cpp
-    app.h
-    app.cpp
-    logger.h
-    logger.cpp
+file(GLOB APP_SOURCES
+    "*.h"
+    "*.cpp"
+    "*.c"
 )
 
 include_directories(
@@ -50,12 +39,28 @@ link_directories(
 
 add_executable(${CMAKE_PROJECT_NAME} ${APP_SOURCES})
 
-target_link_libraries(${CMAKE_PROJECT_NAME}
+target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE
     pthread
     rt
     ${OpenCV_LIBS}
     ${CURL_LIBRARIES}
 )
+
+# Link any mqtt/spdlog libraries installed under THIRD_PARTY_API if present.
+# file(GLOB MQTT_LIBS
+#     "${THIRD_PARTY_API}/mqtt/lib/*.a"
+#     "${THIRD_PARTY_API}/mqtt/lib/*.so"
+# )
+# file(GLOB SPDLOG_LIBS
+#     "${THIRD_PARTY_API}/spdlog/lib/*.a"
+#     "${THIRD_PARTY_API}/spdlog/lib/*.so"
+# )
+if(MQTT_LIBS)
+    target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE ${MQTT_LIBS})
+endif()
+if(SPDLOG_LIBS)
+    target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE ${SPDLOG_LIBS})
+endif()
 
 if(OpenCV_FOUND)
     target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE ${OpenCV_INCLUDE_DIRS})

@@ -1,9 +1,9 @@
-#include "logger.h"
-#include "interface.h"
-#include "configservice.h"
-#include "app.h"
 #include <iostream>
 #include <string>
+#include "logger.h"
+#include "configservice.h"
+#include "peripheralbroker.h"
+#include "app.h"
 
 const char* BOOTSTRAP_LOGGER_NAME = "bootstrap";
 const char* DEFAULT_CONFIG_FILE = "./config.ini";
