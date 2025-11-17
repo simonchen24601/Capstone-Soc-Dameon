@@ -1,4 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
+project(CapstoneSocDameon)
 
 set(CMAKE_CXX_COMPILER g++)
 set(CMAKE_CXX_STANDARD 20)
@@ -10,6 +11,7 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 
 find_package(OpenCV REQUIRED)
+find_package(CURL REQUIRED)
 set(THIRD_PARTY_API "../ThirdPartyApi")
 
 set(CMAKE_CXX_FLAGS "-g -Wall")
@@ -38,6 +40,7 @@ set(APP_SOURCES
 include_directories(
     ${THIRD_PARTY_API}/mqtt/include
     ${THIRD_PARTY_API}/spdlog/include
+    ${CURL_INCLUDE_DIRS}
 )
 
 link_directories(
@@ -51,6 +54,7 @@ target_link_libraries(${CMAKE_PROJECT_NAME}
     pthread
     rt
     ${OpenCV_LIBS}
+    ${CURL_LIBRARIES}
 )
 
 if(OpenCV_FOUND)
