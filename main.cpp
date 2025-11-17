@@ -10,15 +10,19 @@ const char* DEFAULT_CONFIG_FILE = "./config.ini";
 
 void print_config(std::shared_ptr<spdlog::logger> logger, const ConfigService* cfg)
 {
-    ConfigService* cfg = ConfigService::get_instance();
-    auto logger = LoggerFactory::get_instance()->get_logger(BOOTSTRAP_LOGGER_NAME);
-
     logger->info("CONFIG: remote.server_address = {}", cfg->server_address_);
     logger->info("CONFIG: remote.server_port = {}", cfg->server_port_);
     logger->info("CONFIG: remote.aws_iot_core_endpoint = {}", cfg->aws_iot_core_endpoint_);
+    logger->info("CONFIG: remote.aws_iot_core_serial_number = {}", cfg->aws_iot_core_serial_number_);
+    logger->info("CONFIG: remote.aws_iot_ca_filepath = {}", cfg->aws_iot_ca_filepath_);
+    logger->info("CONFIG: remote.aws_iot_cert_filepath = {}", cfg->aws_iot_cert_filepath_);
+    logger->info("CONFIG: remote.aws_iot_key_filepath = {}", cfg->aws_iot_key_filepath_);
 
     logger->info("CONFIG: local.enable_camera = {}", cfg->enable_camera_ ? "true" : "false");
     logger->info("CONFIG: local.camera_device = {}", cfg->camera_device_);
+    logger->info("CONFIG: local.camera_width = {}", cfg->camera_width_);
+    logger->info("CONFIG: local.camera_height = {}", cfg->camera_height_);
+    logger->info("CONFIG: local.camera_framerate = {}", cfg->camera_framerate_);
 
     logger->info("CONFIG: local.enable_mcu = {}", cfg->enable_mcu_ ? "true" : "false");
     logger->info("CONFIG: local.mcu_device = {}", cfg->mcu_device_);

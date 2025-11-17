@@ -15,10 +15,17 @@ public:
     int server_port_;
     // AWS IoT Core
     std::string aws_iot_core_endpoint_;
+    std::string aws_iot_core_serial_number_;
+    std::string aws_iot_ca_filepath_;
+    std::string aws_iot_cert_filepath_;
+    std::string aws_iot_key_filepath_;
     /**** local ****/
     // Camera settings
     bool enable_camera_;
     std::string camera_device_;
+    int camera_width_;
+    int camera_height_;
+    int camera_framerate_;
     // STM32 MCU settings
     bool enable_mcu_;
     std::string mcu_device_;
@@ -35,7 +42,6 @@ public:
     std::string log_level_;
 
 private:
-    // path to current config file (empty if not set)
-    std::string config_path_ = "";
+    const std::string config_path_;
 
 };

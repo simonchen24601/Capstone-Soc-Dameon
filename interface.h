@@ -1,11 +1,16 @@
 #pragma once
 #include <cstdint>
 #include <variant>
+#include <string>
 #include <termios.h>
 #include <fcntl.h>
 // #include <opencv2/opencv.hpp>
 #include <mqtt/async_client.h>
 #include "logger.h"
+#include <memory>
+
+namespace cv { class VideoCapture; }
+namespace cv { class Mat; }
 
 enum peripheral_status_t {
     PERIPHERAL_STATUS_OK,
@@ -40,8 +45,9 @@ private:
 
 private:
     const char* LOGGER_NAME_ = "MCU";
-    const char* HARDWARE_PATH_ = "/dev/ttyAMA0";
-    static constexpr int BAUDRATE_ = B115200;
+    // defaults (overridden from ConfigService when available)
+    const std::string HARDWARE_PATH_DEFAULT_ = "/dev/ttyAMA0";
+    static constexpr int BAUDRATE_DEFAULT_ = B115200;
     std::shared_ptr<spdlog::logger> logger_;
     int dev_fd_;
 };
@@ -50,13 +56,27 @@ class CameraMicrophoneInterface {
 public:
     CameraMicrophoneInterface();
     ~CameraMicrophoneInterface();
-
+    // initialize camera device (e.g. "/dev/video0" or "0")
+    int init(const std::string& device, int camera_width, int camera_height, int camera_framerate);
     void get_image();
     void start_stream_async();
     void stop_stream_async();
 
 private:
-
+    const char* LOGGER_NAME_ = "camera_microphone";
+    std::shared_ptr<spdlog::logger> logger_;
+    std::unique_ptr<cv::VideoCapture> cap_;
+    int camera_width_;
+    int camera_height_; 
+    int camera_framerate_;
+    std::string device_;
+    // streaming control
+    std::thread stream_thread_;
+    std::atomic_bool streaming_{false};
+    std::mutex stream_mutex_;
+    std::condition_variable stream_cv_;
+    std::function<void(const cv::Mat&)> frame_callback_;
+    int stream_fps_ = 0;
 };
 
 class PeripheralBroker : public SingletonT<PeripheralBroker>

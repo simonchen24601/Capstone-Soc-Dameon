@@ -48,6 +48,11 @@ link_directories(
 add_executable(${CMAKE_PROJECT_NAME} ${APP_SOURCES})
 
 target_link_libraries(${CMAKE_PROJECT_NAME}
-    pthread 
+    pthread
     rt
+    ${OpenCV_LIBS}
 )
+
+if(OpenCV_FOUND)
+    target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE ${OpenCV_INCLUDE_DIRS})
+endif()
