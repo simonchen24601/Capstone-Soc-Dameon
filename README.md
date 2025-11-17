@@ -15,7 +15,9 @@ all compiled standalone libs should be put into the `../ThirdPartyApi` dir
 ### setup OpenSSL / OpenCV / CURL
 
 Using system default, as for debian based system:
-`apt install libssl-dev libopencv-dev libcurl4-openssl-dev`
+```bash
+apt install libssl-dev libopencv-dev libcurl4-openssl-dev
+```
 
 ### setup spdlog
 
