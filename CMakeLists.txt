@@ -21,6 +21,12 @@ set(CMAKE_PROJECT_NAME capstone_soc_dameon)
 set(APP_SOURCES
     util.hpp
     main.cpp
+    ini.h
+    ini.c
+    INIReader.h
+    INIReader.cpp
+    configservice.h
+    configservice.cpp
     interface.h
     interface.cpp
     app.h

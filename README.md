@@ -25,11 +25,19 @@ make -j 8 all install
 
 ### setup Eclipse Paho MQTT C++
 
+need install OpenSSL
+`apt install  libssl-dev`
+Building the documentation requires doxygen and optionally graphviz to be installed
+`sudo apt-get install doxygen graphviz`
+
 ```bash
 git clone git@github.com:eclipse-paho/paho.mqtt.cpp.git
 cd paho.mqtt.cpp
+git submodule init
+git submodule update
 git checkout v1.5.3
 mkdir build && cd build
-cmake -DCMAKE_INSTALL_PREFIX:PATH=../ThirdPartyApi/mqtt ..
+
+cmake -DPAHO_WITH_MQTT_C=ON -DPAHO_BUILD_EXAMPLES=ON -DCMAKE_INSTALL_PREFIX:PATH=../ThirdPartyApi/mqtt ..
 make -j 8 all install
 ```
