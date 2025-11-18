@@ -22,9 +22,9 @@ void App::run()
             }; break;
             case EVENT_MCU_MOTION_SENSOR_TRIGGERED: {
                 handle_motion_sensor_triggered();
-                // time_event_queue_.push({
-                //     std::chrono::steady_clock::now() + std::chrono::seconds(10), 
-                //     EVENT_MCU_MOTION_SENSOR_TRIGGERED});
+                time_event_queue_.push({
+                    std::chrono::steady_clock::now() + std::chrono::seconds(10), 
+                    EVENT_MCU_MOTION_SENSOR_TRIGGERED});
             }; break;
             case EVENT_MCU_TEMPRATURE_SENSOR_READ: {
                 handle_mcu_sensor_read();
@@ -42,7 +42,7 @@ void App::run()
 
     auto pull_event_queue = [&]() {
         while(!event_queue_.empty()) {
-            event_t ev = event_queue_.back();
+            event_t ev = event_queue_.front();
             event_queue_.pop();
             handle_event(ev);
         }
@@ -89,22 +89,30 @@ void App::stop()
 
 void App::handle_mcu_timeout()
 {
-    logger_->info("%s not implemented", __func__);
+    logger_->info("{} not implemented", __func__);
 }
 
 void App::handle_mcu_sensor_read()
 {
-    logger_->info("%s not implemented", __func__);
+    logger_->info("{} not implemented", __func__);
 }
 
 void App::handle_motion_sensor_triggered()
 {
-    logger_->info("%s not implemented", __func__);
+    auto peripheral_broker = PeripheralBroker::get_instance();
+    int ret = peripheral_broker->get_camera_image();
+    if(ret != PERIPHERAL_STATUS_OK) {
+        logger_->error("failed to get camera image");
+    }
+    else {
+        logger_->info("camera image captured on proximity sensor trigger");
+    }
+    
 }
 
 void App::handle_proximity_sensor_triggered()
 {
-    logger_->info("%s not implemented", __func__);
+    logger_->info("{} not implemented", __func__);
 }
 
 void App::handle_server_streaming_begin()
