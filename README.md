@@ -2,7 +2,19 @@
 
 Raspberry Pi 5 (SoC) Dameon Service for Capstone Project of the Embedded System Devlopment 
 
-## setup dependance
+## Functionalities
+
+- Configuration via `config.ini` and runtime logging (console + file).
+- Initialize and manage peripherals: 
+    - camera
+    - MCU (UART or USB).
+- Timed, event-driven main loop for periodic sensor reads and tasks.
+- Camera capture, periodic image save, and optional async streaming.
+- MCU communication over UART (or USB mode) with robust read/write helpers.
+- TODO: MQTT publish/subscribe support for telemetry (NMEA -> JSON publishing).
+- TODO: HTTPS REST API communicate with the server backend
+
+## Setup dependance
 
 required third party libraries:
 - spdlog
@@ -12,25 +24,25 @@ required third party libraries:
 
 all compiled standalone libs should be put into the `../ThirdPartyApi` dir
 
-### setup OpenSSL / OpenCV / CURL
+### Setup OpenSSL / OpenCV / CURL
 
 Using system default, as for debian based system:
 ```bash
 apt install libssl-dev libopencv-dev libcurl4-openssl-dev
 ```
 
-### setup spdlog
+### Setup spdlog
 
 ```bash
 git clone git@github.com:gabime/spdlog.git
 cd spdlog
 git checkout v1.16.0
 mkdir build && cd build
-cmake -DCMAKE_INSTALL_PREFIX:PATH=../ThirdPartyApi/spdlog ..
+cmake -DCMAKE_INSTALL_PREFIX:PATH=../../ThirdPartyApi/spdlog ..
 make -j 8 all install
 ```
 
-### setup Eclipse Paho MQTT C++
+### Setup Eclipse Paho MQTT C++
 
 Need to install OpenSSL
 `apt install  libssl-dev`
@@ -45,7 +57,7 @@ git submodule update
 git checkout v1.5.3
 mkdir build && cd build
 
-cmake -DPAHO_WITH_MQTT_C=ON -DPAHO_BUILD_EXAMPLES=ON -DCMAKE_INSTALL_PREFIX:PATH=../ThirdPartyApi/mqtt ..
+cmake -DPAHO_WITH_MQTT_C=ON -DPAHO_BUILD_EXAMPLES=ON -DCMAKE_INSTALL_PREFIX:PATH=../../ThirdPartyApi/mqtt ..
 make -j 8 all install
 ```
 
@@ -66,7 +78,7 @@ sudo usermod -aG video $USER
 
 2. See kernel messages for the camera
 ```bash
-after plugging device:
+# after plugging device:
 dmesg | tail -n 120
 ```
 
