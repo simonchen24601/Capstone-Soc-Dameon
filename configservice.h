@@ -19,6 +19,7 @@ public:
     std::string aws_iot_ca_filepath_;
     std::string aws_iot_cert_filepath_;
     std::string aws_iot_key_filepath_;
+
     /**** local ****/
     // Camera settings
     bool enable_camera_;
@@ -30,6 +31,7 @@ public:
     bool enable_mcu_;
     std::string mcu_device_;
     int mcu_baudrate_;
+    std::string mcu_mode_;  // MCU transport mode: "UART" or "USB"
 
     /**** logging ****/
     // enable writing logs to file (LoggerFactory still controls sinks)

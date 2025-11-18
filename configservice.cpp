@@ -29,6 +29,8 @@ int ConfigService::load_config(const std::string& config_path)
 	enable_mcu_ = reader.GetBoolean("local", "enable_mcu", false);
 	mcu_device_ = reader.Get("local", "mcu_device", "/dev/ttyAMA0");
 	mcu_baudrate_ = static_cast<int>(reader.GetInteger("local", "mcu_baudrate", 115200));
+	// mcu_mode: USB or UART
+	mcu_mode_ = reader.Get("local", "mcu_mode", "UART");
 
 	// log section
 	enable_file_logging_ = reader.GetBoolean("log", "enable_file", true);

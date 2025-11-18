@@ -91,6 +91,15 @@ int MCUInterface::init()
     int baud_const = BAUDRATE_DEFAULT_;
 
     if (cfg && cfg->enable_mcu_) {
+        // if configured for USB mode, we don't open UART
+        std::string mode = cfg->mcu_mode_;
+        for (auto &c : mode) c = static_cast<char>(toupper(c));
+        if (mode == "USB") {
+            logger_->info("MCU init: configured in USB mode, skipping UART open");
+            dev_fd_ = -1;
+            return 0;
+        }
+
         if (!cfg->mcu_device_.empty()) dev = cfg->mcu_device_;
         if (cfg->mcu_baudrate_ > 0) {
             baud_const = baudrate_to_constant(cfg->mcu_baudrate_);

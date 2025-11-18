@@ -16,12 +16,6 @@ Raspberry Pi 5 (SoC) Dameon Service for Capstone Project of the Embedded System 
 
 ## Setup dependance
 
-required third party libraries:
-- spdlog
-- Eclipse Paho MQTT C++
-- OpenCV
-- gRPC C++
-
 all compiled standalone libs should be put into the `../ThirdPartyApi` dir
 
 ### Setup OpenSSL / OpenCV / CURL
