@@ -57,9 +57,9 @@ public:
     int get_camera_image();
 
     // mcu interfaces
-    // int get_micophone_status();
+    int get_micophone_status() { return PERIPHERAL_STATUS_NOT_SUPPORTED; };
     int get_mcu_status();
-    int get_motor_driver_status();
+    int get_motor_driver_status() { return PERIPHERAL_STATUS_NOT_SUPPORTED; };
 
 private:
     int init_camera();

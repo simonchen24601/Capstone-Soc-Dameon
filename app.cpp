@@ -6,9 +6,7 @@
 App::App()
     : logger_{LoggerFactory::get_instance()->get_logger(LOGGER_NAME_)}
     , exit_flag_{false}
-{
-
-}
+{}
 
 void App::run()
 {
@@ -22,13 +20,13 @@ void App::run()
             }; break;
             case EVENT_MCU_MOTION_SENSOR_TRIGGERED: {
                 handle_motion_sensor_triggered();
-                time_event_queue_.push({
+                timed_event_queue_.push({
                     std::chrono::steady_clock::now() + std::chrono::seconds(10), 
                     EVENT_MCU_MOTION_SENSOR_TRIGGERED});
             }; break;
             case EVENT_MCU_TEMPRATURE_SENSOR_READ: {
                 handle_mcu_sensor_read();
-                time_event_queue_.push({
+                timed_event_queue_.push({
                     std::chrono::steady_clock::now() + std::chrono::seconds(TEMPRATURE_SENSOR_READ_INTERVAL_SEC_), 
                     EVENT_MCU_TEMPRATURE_SENSOR_READ});
             }; break;
@@ -41,38 +39,52 @@ void App::run()
     };
 
     auto pull_event_queue = [&]() {
-        while(!event_queue_.empty()) {
-            event_t ev = event_queue_.front();
-            event_queue_.pop();
+        bool is_busy = false;
+        while(!high_priority_event_queue_.empty()) {
+            event_t ev = high_priority_event_queue_.front();
+            high_priority_event_queue_.pop();
             handle_event(ev);
+            is_busy = true;
         }
+        if(!low_priority_event_queue_.empty()) {
+            event_t ev = low_priority_event_queue_.front();
+            low_priority_event_queue_.pop();
+            handle_event(ev);
+            is_busy = true;
+        }
+        return is_busy;
     };
 
     auto check_time_event = [&]() {
-        while (!time_event_queue_.empty()) {
+        bool is_busy = false;
+        while (!timed_event_queue_.empty()) {
             auto now = std::chrono::steady_clock::now();
-            auto next = time_event_queue_.top();
+            auto next = timed_event_queue_.top();
             if (next.timestamp <= now) {
-                time_event_queue_.pop();
+                timed_event_queue_.pop();
                 handle_event(next.event_handler);
+                is_busy = true;
             }
             else {
                 break;
             }
         }
+        return is_busy;
     };
 
-    event_queue_.push(EVENT_MCU_TEMPRATURE_SENSOR_READ);
-    event_queue_.push(EVENT_MCU_MOTION_SENSOR_TRIGGERED);
+    high_priority_event_queue_.push(EVENT_MCU_TEMPRATURE_SENSOR_READ);
+    high_priority_event_queue_.push(EVENT_MCU_MOTION_SENSOR_TRIGGERED);
     logger_->info("main event loop begin");
     while(!exit_flag_) {
         busy_flag = false;
         switch(count % 8) {
             case 0:
-            case 1:
-                check_time_event();
-            default:
-                pull_event_queue();
+            case 1: {
+                check_time_event() ? busy_flag = true : busy_flag;
+            }
+            default: {
+                pull_event_queue() ? busy_flag = true : busy_flag;
+            }
         }
 
         if(!busy_flag) {
@@ -89,12 +101,12 @@ void App::stop()
 
 void App::handle_mcu_timeout()
 {
-    logger_->info("{} not implemented", __func__);
+    logger_->info("[{}] not implemented", __func__);
 }
 
 void App::handle_mcu_sensor_read()
 {
-    logger_->info("{} not implemented", __func__);
+    logger_->info("[{}] not implemented", __func__);
 }
 
 void App::handle_motion_sensor_triggered()
@@ -102,17 +114,16 @@ void App::handle_motion_sensor_triggered()
     auto peripheral_broker = PeripheralBroker::get_instance();
     int ret = peripheral_broker->get_camera_image();
     if(ret != PERIPHERAL_STATUS_OK) {
-        logger_->error("failed to get camera image");
+        logger_->error("[{}] failed to get camera image", __func__);
     }
     else {
-        logger_->info("camera image captured on proximity sensor trigger");
+        logger_->info("[{}] camera image captured", __func__);
     }
-    
 }
 
 void App::handle_proximity_sensor_triggered()
 {
-    logger_->info("{} not implemented", __func__);
+    logger_->info("[{}] not implemented", __func__);
 }
 
 void App::handle_server_streaming_begin()

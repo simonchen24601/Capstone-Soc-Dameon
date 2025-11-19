@@ -7,15 +7,16 @@
 #include <errno.h>
 #include <string.h>
 #include <stdlib.h>
+#include <chrono>
 
 MCUInterface::MCUInterface()
     : logger_{LoggerFactory::get_instance()->get_logger(LOGGER_NAME_)}
     , dev_fd_{-1}
-{
-}
+{}
 
 MCUInterface::~MCUInterface()
 {
+    stop_background();
     if (dev_fd_ >= 0) close(dev_fd_);
 }
 
@@ -84,30 +85,65 @@ static inline int baudrate_to_constant(int baud)
     }
 }
 
-int MCUInterface::init()
+int MCUInterface::init(const std::string& device, int baudrate)
 {
-    const ConfigService* cfg = ConfigService::get_instance();
-    std::string dev = HARDWARE_PATH_DEFAULT_;
-    int baud_const = BAUDRATE_DEFAULT_;
+    // std::string mode = cfg->mcu_mode_;
+    // for (auto &c : mode) c = static_cast<char>(toupper(c));
+    // if (mode == "USB") {
+    //     logger_->info("MCU init: configured in USB mode, skipping UART open");
+    //     dev_fd_ = -1;
+    //     return 0;
+    // }
 
-    if (cfg && cfg->enable_mcu_) {
-        // if configured for USB mode, we don't open UART
-        std::string mode = cfg->mcu_mode_;
-        for (auto &c : mode) c = static_cast<char>(toupper(c));
-        if (mode == "USB") {
-            logger_->info("MCU init: configured in USB mode, skipping UART open");
-            dev_fd_ = -1;
-            return 0;
+    dev_fd_ = open_uart(device, baudrate_to_constant(baudrate));
+    if (dev_fd_ < 0) return -1;
+
+    // start background threads for read/write
+    running_.store(true);
+
+    // write thread
+    write_thread_ = std::thread([this]() {
+        while (running_.load()) {
+            std::vector<uint8_t> pkt;
+            {
+                std::unique_lock<std::mutex> lk(write_mutex_);
+                write_cv_.wait(lk, [this]{ return !write_queue_.empty() || !running_.load(); });
+                if (!running_.load() && write_queue_.empty()) break;
+                pkt = std::move(write_queue_.front());
+                write_queue_.pop();
+            }
+            if (!pkt.empty()) {
+                ssize_t w = write_bytes(pkt.data(), pkt.size());
+                if (w < 0) {
+                    logger_->error("async write failed");
+                }
+            }
         }
+    });
 
-        if (!cfg->mcu_device_.empty()) dev = cfg->mcu_device_;
-        if (cfg->mcu_baudrate_ > 0) {
-            baud_const = baudrate_to_constant(cfg->mcu_baudrate_);
+    // read thread
+    read_thread_ = std::thread([this]() {
+        const size_t BUF_SZ = 1024;
+        std::vector<uint8_t> buf(BUF_SZ);
+        while (running_.load()) {
+            ssize_t r = read_bytes(buf.data(), buf.size());
+            if (r > 0) {
+                std::vector<uint8_t> got(buf.begin(), buf.begin() + r);
+                if (read_callback_) {
+                    try { read_callback_(got); } catch (const std::exception& e) {
+                        logger_->error("read callback exception: {}", e.what());
+                    } catch (...) {
+                        logger_->error("read callback unknown exception");
+                    }
+                }
+            } else {
+                // small sleep to avoid tight loop on read failures
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            }
         }
-    }
+    });
 
-    dev_fd_ = open_uart(dev, baud_const);
-    return (dev_fd_ >= 0) ? 0 : -1;
+    return 0;
 }
 
 ssize_t MCUInterface::write_bytes(const void* data, size_t len)
@@ -130,6 +166,36 @@ ssize_t MCUInterface::write_bytes(const void* data, size_t len)
         remaining -= static_cast<size_t>(w);
     }
     return static_cast<ssize_t>(len);
+}
+
+int MCUInterface::write_bytes_async(const std::vector<uint8_t>& data)
+{
+    if (dev_fd_ < 0) return -1;
+    if (!running_.load()) return -1;
+    {
+        std::lock_guard<std::mutex> lk(write_mutex_);
+        write_queue_.push(data);
+    }
+    write_cv_.notify_one();
+    return 0;
+}
+
+void MCUInterface::set_read_callback(const std::function<void(const std::vector<uint8_t>&)>& cb)
+{
+    read_callback_ = cb;
+}
+
+void MCUInterface::stop_background()
+{
+    if (!running_.load()) {
+        // still ensure write thread will not be blocked
+        write_cv_.notify_all();
+        return;
+    }
+    running_.store(false);
+    write_cv_.notify_all();
+    if (write_thread_.joinable()) write_thread_.join();
+    if (read_thread_.joinable()) read_thread_.join();
 }
 
 ssize_t MCUInterface::read_bytes(void* data, size_t len)
@@ -158,13 +224,13 @@ int MCUInterface::open_uart(const std::string& dev, int baudrate)
 {
     int fd = open(dev.c_str(), O_RDWR | O_NOCTTY | O_SYNC);
     if (fd < 0) {
-        logger_->error("open_uart: %s", strerror(errno));
+        logger_->error("open_uart: {}", strerror(errno));
         return -1;
     }
 
     struct termios tty {};
     if (tcgetattr(fd, &tty) != 0) {
-        logger_->error("tcgetattr: %s", strerror(errno));
+        logger_->error("tcgetattr: {}", strerror(errno));
         close(fd);
         return -1;
     }
@@ -186,10 +252,11 @@ int MCUInterface::open_uart(const std::string& dev, int baudrate)
     tty.c_cflag &= ~CRTSCTS;
 
     if (tcsetattr(fd, TCSANOW, &tty) != 0) {
-        logger_->error("tcsetattr: %s", strerror(errno));
+        logger_->error("tcsetattr: {}", strerror(errno));
         close(fd);
         return -1;
     }
 
+    logger_->info("MCU connected, opened {} at baudrate {}, fd {}", dev, baudrate, fd);
     return fd;
 }

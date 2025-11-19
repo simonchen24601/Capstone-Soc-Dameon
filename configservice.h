@@ -13,6 +13,8 @@ public:
     // server backend
     std::string server_address_;
     int server_port_;
+    bool server_ssl_enabled_;
+    
     // AWS IoT Core
     std::string aws_iot_core_endpoint_;
     std::string aws_iot_core_serial_number_;

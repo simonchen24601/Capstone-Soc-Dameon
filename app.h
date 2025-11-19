@@ -45,7 +45,7 @@ private:
         EVENT_SERVER_STREAMING_BEGIN,
         EVENT_SERVER_STREAMING_END
     };
-    
+
     struct TimedEvent {
         std::chrono::steady_clock::time_point timestamp;
         event_t event_handler;
@@ -57,12 +57,14 @@ private:
         }
     };
 
+    /**** event queues ****/
     std::priority_queue<
         TimedEvent,
         std::vector<TimedEvent>,
         TimedEventCompare
-    > time_event_queue_;
-    std::queue<event_t> event_queue_;
+    > timed_event_queue_;
+    std::queue<event_t> high_priority_event_queue_;
+    std::queue<event_t> low_priority_event_queue_;
 
     bool exit_flag_;
 };

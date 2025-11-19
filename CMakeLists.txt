@@ -47,14 +47,14 @@ target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE
 )
 
 # Link any mqtt/spdlog libraries installed under THIRD_PARTY_API if present.
-file(GLOB MQTT_LIBS
-    "${THIRD_PARTY_API}/mqtt/lib/*.a"
-    "${THIRD_PARTY_API}/mqtt/lib/*.so"
-)
-file(GLOB SPDLOG_LIBS
-    "${THIRD_PARTY_API}/spdlog/lib/*.a"
-    "${THIRD_PARTY_API}/spdlog/lib/*.so"
-)
+# file(GLOB MQTT_LIBS
+#     "${THIRD_PARTY_API}/mqtt/lib/*.a"
+#     "${THIRD_PARTY_API}/mqtt/lib/*.so"
+# )
+# file(GLOB SPDLOG_LIBS
+#     "${THIRD_PARTY_API}/spdlog/lib/*.a"
+#     "${THIRD_PARTY_API}/spdlog/lib/*.so"
+# )
 if(MQTT_LIBS)
     message(STATUS "Found MQTT libs: ${MQTT_LIBS}")
     target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE ${MQTT_LIBS})

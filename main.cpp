@@ -27,6 +27,7 @@ void print_config(std::shared_ptr<spdlog::logger> logger, const ConfigService* c
     logger->info("CONFIG: local.enable_mcu = {}", cfg->enable_mcu_ ? "true" : "false");
     logger->info("CONFIG: local.mcu_device = {}", cfg->mcu_device_);
     logger->info("CONFIG: local.mcu_baudrate = {}", cfg->mcu_baudrate_);
+    logger->info("CONFIG: local.mcu_mode = {}", cfg->mcu_mode_);
 
     logger->info("CONFIG: log.enable_file = {}", cfg->enable_file_logging_ ? "true" : "false");
     logger->info("CONFIG: log.log_directory = {}", cfg->log_directory_);
@@ -58,9 +59,10 @@ int main(int argc, char** argv)
 
     // init peripherals
     auto peripheral_broker = PeripheralBroker::get_instance();
+    peripheral_broker->init_all();
 
     App app{};
-    logger->info("init completed");
+    logger->info("bootstrap completed, launching app");
     app.run();
     return 0;
 }

@@ -21,15 +21,14 @@
 
 /**** PeripheralBroker starts ****/
 
-PeripheralBroker::PeripheralBroker()
-{
-    logger_ = LoggerFactory::get_instance()->get_logger(LOGGER_NAME_);
-    logger_->info("Initializing all peripherals...");
-    init_all();
-}
+PeripheralBroker::PeripheralBroker() 
+    : logger_{LoggerFactory::get_instance()->get_logger(LOGGER_NAME_)}
+{}
 
 int PeripheralBroker::init_all()
 {
+    logger_->info("Initializing all peripherals...");
+
     int ret;
     int all_okay = PERIPHERAL_STATUS_OK;
 
@@ -61,7 +60,7 @@ int PeripheralBroker::init_camera()
     dev_camera_ = std::make_shared<CameraMicrophoneInterface>();
     auto config = ConfigService::get_instance();
     dev_camera_->init(config->camera_device_, config->camera_width_, config->camera_height_, config->camera_framerate_);
-    dev_camera_->get_image();
+
     return get_camera_status();
 }
 
@@ -102,7 +101,15 @@ int PeripheralBroker::get_camera_image()
 
 int PeripheralBroker::init_mcu()
 {
-    return get_mcu_status();
+    logger_->info("Initializing camera");
+    dev_mcu_ = std::make_shared<MCUInterface>();
+    auto config = ConfigService::get_instance();
+    int ret = dev_mcu_->init(config->mcu_device_, config->mcu_baudrate_);
+    if (ret != 0) {
+        logger_->error("MCUInterface init failed");
+        return PERIPHERAL_STATUS_ERROR;
+    }
+    return PERIPHERAL_STATUS_OK;
 }
 
 int PeripheralBroker::get_mcu_status()
@@ -115,15 +122,7 @@ int PeripheralBroker::get_mcu_status()
 
 int PeripheralBroker::init_motor_driver()
 {
-    return get_motor_driver_status();
-}
-
-int PeripheralBroker::get_motor_driver_status()
-{
-    if(!dev_motor_driver_) {
-        return PERIPHERAL_STATUS_NOT_SUPPORTED;
-    }
-    return PERIPHERAL_STATUS_OK;
+    return PERIPHERAL_STATUS_NOT_SUPPORTED;
 }
 
 /**** PeripheralBroker ends ****/
