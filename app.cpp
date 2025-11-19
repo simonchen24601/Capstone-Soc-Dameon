@@ -99,6 +99,17 @@ void App::stop()
     exit_flag_ = true;
 }
 
+void App::on_MCU_data(const std::vector<uint8_t>& msg)
+{
+    SingletonT<App>::get_instance()->on_MCU_data_impl(msg);
+}
+
+void App::on_MCU_data_impl(const std::vector<uint8_t>& msg)
+{
+    logger_->info("Received MCU data ({} bytes)", msg.size());
+    // todo: decode the data from the MCU and enqueue corresponding events
+}
+
 void App::handle_mcu_timeout()
 {
     logger_->info("[{}] not implemented", __func__);

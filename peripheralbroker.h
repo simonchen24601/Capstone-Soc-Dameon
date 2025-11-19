@@ -48,24 +48,24 @@ public:
     device_variant_t;
 
     PeripheralBroker();
-    int init_all();
-
-    // camera interfaces
-    int get_camera_status();
-    int start_camera_streaming();
-    int stop_camera_streaming();
-    int get_camera_image();
-
-    // mcu interfaces
-    int get_micophone_status() { return PERIPHERAL_STATUS_NOT_SUPPORTED; };
-    int get_mcu_status();
-    int get_motor_driver_status() { return PERIPHERAL_STATUS_NOT_SUPPORTED; };
-
-private:
     int init_camera();
     // int init_microphone();
     int init_mcu();
     int init_motor_driver();
+
+    // camera interfaces
+    int get_camera_status();
+    int get_micophone_status() { return PERIPHERAL_STATUS_NOT_SUPPORTED; };
+    int get_camera_image();
+    int start_camera_streaming();
+    int stop_camera_streaming();
+
+    // mcu interfaces
+    int get_mcu_status();
+    int get_motor_driver_status() { return PERIPHERAL_STATUS_NOT_SUPPORTED; };
+
+private:
+
 
 private:
     const char* LOGGER_NAME_ = "peripheral_broker";

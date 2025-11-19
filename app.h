@@ -13,10 +13,12 @@ public:
     App();
     void run();
     void stop();
+    inline static void on_MCU_data(const std::vector<uint8_t>&);    // static wrapper for MCU data callback
 
 private:
     // MCU callbacks
-    void on_MCU_msg() {};
+    void on_MCU_data_impl(const std::vector<uint8_t>& msg); // called on MCU read, not thread-safe, message may be partial
+    void on_MCU_msg() {};   // complete message received from MCU
     void on_MCU_motion_sensor_triggered() {};
     void on_MCU_proximity_sensor_read() {};
     void on_MCU_temperature_sensor_read() {};

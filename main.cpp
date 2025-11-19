@@ -57,11 +57,21 @@ int main(int argc, char** argv)
     auto logger = p_logger_factory->get_logger(BOOTSTRAP_LOGGER_NAME);
     print_config(logger, p_config);
 
+    App app{};
+
     // init peripherals
     auto peripheral_broker = PeripheralBroker::get_instance();
-    peripheral_broker->init_all();
+    logger->info("Initializing all peripherals...");
+    int ret;
+    ret = peripheral_broker->init_camera();
+    if (ret != PERIPHERAL_STATUS_OK) {
+        logger->error("Camera initialization failed");
+    }
+    ret = peripheral_broker->init_mcu();
+    if (ret != PERIPHERAL_STATUS_OK) {
+        logger->error("MCU initialization failed");
+    }
 
-    App app{};
     logger->info("bootstrap completed, launching app");
     app.run();
     return 0;

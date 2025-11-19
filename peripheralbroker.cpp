@@ -25,35 +25,6 @@ PeripheralBroker::PeripheralBroker()
     : logger_{LoggerFactory::get_instance()->get_logger(LOGGER_NAME_)}
 {}
 
-int PeripheralBroker::init_all()
-{
-    logger_->info("Initializing all peripherals...");
-
-    int ret;
-    int all_okay = PERIPHERAL_STATUS_OK;
-
-    ret = init_camera();
-    if (ret != PERIPHERAL_STATUS_OK) {
-        logger_->error("camera initialization failed");
-        all_okay = PERIPHERAL_STATUS_ERROR;
-    }
-
-    ret = init_mcu();
-    if (ret != PERIPHERAL_STATUS_OK) {
-        logger_->error("MQTT over UART initialization failed");
-        all_okay = PERIPHERAL_STATUS_ERROR;
-    }
-
-    if (all_okay == PERIPHERAL_STATUS_OK) {
-        logger_->info("all peripherals successfully initialized");
-    }
-    else {
-        logger_->warn("some peripherals failed to initialize");
-    }
-
-    return all_okay;
-}
-
 int PeripheralBroker::init_camera()
 {
     logger_->info("Initializing camera");
