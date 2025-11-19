@@ -67,39 +67,44 @@ int CameraMicrophoneInterface::init(const std::string& device, int camera_width,
     }
 }
 
-void CameraMicrophoneInterface::get_image()
+int CameraMicrophoneInterface::get_image()
 {
-    if (!cap_ || !cap_->isOpened()) return;
+    if (!cap_ || !cap_->isOpened()) return -1;
 
     cv::Mat frame;
     if (!cap_->read(frame)) {
         logger_->error("Camera read failed");
-        return;
+        return -1;
     }
 
+    // todo: update the saved path from the ConfigService
     std::filesystem::create_directories("./logs");
     std::string out = "./logs/capture.jpg";
     try {
         if (!cv::imwrite(out, frame)) {
             logger_->error("Failed to write image to {}", out);
+            return -1;
         } else {
             logger_->info("Saved camera image to {}", out);
+            return 0;
         }
     } catch (const std::exception& e) {
         logger_->error("Exception writing image: {}", e.what());
+        return -1;
     }
+    
 }
 
-void CameraMicrophoneInterface::start_stream_async()
+int CameraMicrophoneInterface::start_stream_async()
 {
     if (!cap_ || !cap_->isOpened()) {
         logger_->error("start_stream_async: camera not initialized");
-        return;
+        return -1;
     }
 
     if (streaming_.load()) {
         logger_->info("start_stream_async: already streaming");
-        return;
+        return -1;
     }
 
     stream_fps_ = (camera_framerate_ > 0) ? camera_framerate_ : 10;
@@ -148,13 +153,17 @@ void CameraMicrophoneInterface::start_stream_async()
         }
         logger_->info("camera stream thread exiting");
     });
+    return 0;
 }
 
-void CameraMicrophoneInterface::stop_stream_async()
+int CameraMicrophoneInterface::stop_stream_async()
 {
-    if (!streaming_.load()) return;
+    if (!streaming_.load()) {
+        return -1;
+    }
     streaming_.store(false);
     stream_cv_.notify_all();
     if (stream_thread_.joinable()) stream_thread_.join();
     logger_->info("stopped camera stream");
+    return 0;
 }

@@ -17,9 +17,9 @@ public:
     ~CameraMicrophoneInterface();
     // initialize camera device (e.g. "/dev/video0" or "0")
     int init(const std::string& device, int camera_width, int camera_height, int camera_framerate);
-    void get_image();
-    void start_stream_async();
-    void stop_stream_async();
+    int get_image();
+    int start_stream_async();
+    int stop_stream_async();
 
 private:
     const char* LOGGER_NAME_ = "camera_microphone";
