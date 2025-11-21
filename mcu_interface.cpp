@@ -85,7 +85,7 @@ static inline int baudrate_to_constant(int baud)
     }
 }
 
-int MCUInterface::init(const std::string& device, int baudrate)
+int MCUInterface::init(const std::string& device, int baudrate, const std::function<void(const std::vector<uint8_t>&)>& cb)
 {
     // std::string mode = cfg->mcu_mode_;
     // for (auto &c : mode) c = static_cast<char>(toupper(c));
@@ -97,6 +97,9 @@ int MCUInterface::init(const std::string& device, int baudrate)
 
     dev_fd_ = open_uart(device, baudrate_to_constant(baudrate));
     if (dev_fd_ < 0) return -1;
+
+    // set read callback
+    set_read_callback(cb);
 
     // start background threads for read/write
     running_.store(true);
@@ -123,7 +126,7 @@ int MCUInterface::init(const std::string& device, int baudrate)
 
     // read thread
     read_thread_ = std::thread([this]() {
-        const size_t BUF_SZ = 1024;
+        const size_t BUF_SZ = 256;
         std::vector<uint8_t> buf(BUF_SZ);
         while (running_.load()) {
             ssize_t r = read_bytes(buf.data(), buf.size());
@@ -208,14 +211,21 @@ ssize_t MCUInterface::read_bytes(void* data, size_t len)
     uint8_t* buf = reinterpret_cast<uint8_t*>(data);
     size_t received = 0;
     while (received < len) {
-        ssize_t r = read(dev_fd_, buf + received, len - received);
+        ssize_t r = ::read(dev_fd_, buf + received, len - received);
         if (r < 0) {
             if (errno == EINTR) continue;
             logger_->error("read_bytes: %s", strerror(errno));
             return -1;
         }
-        if (r == 0) break;
+        if (r == 0) break; // EOF
+
+        // check for newline in the newly read bytes and stop if found
+        void* nl = memchr(buf + received, '\n', static_cast<size_t>(r));
         received += static_cast<size_t>(r);
+        if (nl != nullptr) {
+            break;
+        }
+        // otherwise continue until buffer filled or newline found
     }
     return static_cast<ssize_t>(received);
 }

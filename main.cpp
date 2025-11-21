@@ -67,9 +67,15 @@ int main(int argc, char** argv)
     if (ret != PERIPHERAL_STATUS_OK) {
         logger->error("Camera initialization failed");
     }
-    ret = peripheral_broker->init_mcu();
+
+    auto cb = static_cast<void(*)(const std::vector<uint8_t>& msg)>(&App::on_MCU_data);
+    ret = peripheral_broker->init_mcu(cb);
     if (ret != PERIPHERAL_STATUS_OK) {
         logger->error("MCU initialization failed");
+    }
+    ret = peripheral_broker->init_motor_driver();
+    if (ret != PERIPHERAL_STATUS_OK) {
+        logger->error("Motor Driver initialization failed");
     }
 
     logger->info("bootstrap completed, launching app");

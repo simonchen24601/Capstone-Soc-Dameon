@@ -1,6 +1,7 @@
 #include "app.h"
 #include <chrono>
 #include <thread>
+#include <string_view>
 #include "peripheralbroker.h"
 
 App::App()
@@ -106,7 +107,12 @@ void App::on_MCU_data(const std::vector<uint8_t>& msg)
 
 void App::on_MCU_data_impl(const std::vector<uint8_t>& msg)
 {
-    logger_->info("Received MCU data ({} bytes)", msg.size());
+    if (!msg.empty()) {
+        std::string_view sv(reinterpret_cast<const char*>(msg.data()), msg.size());
+        logger_->info("Received MCU data ({} bytes): {}", msg.size(), sv);
+    } else {
+        logger_->info("Received MCU data (0 bytes)");
+    }
     // todo: decode the data from the MCU and enqueue corresponding events
 }
 
@@ -117,7 +123,25 @@ void App::handle_mcu_timeout()
 
 void App::handle_mcu_sensor_read()
 {
-    logger_->info("[{}] not implemented", __func__);
+    static std::atomic counter = 0;
+    counter++;
+
+    int temp_x100 = 2500; // 25.00 * 100
+    int hum_x100 = 5000;  // 50.00 * 100
+    int counter = 0;
+
+    /* temp: 25.00 .. 25.90 in steps of 0.10 -> x100: 2500 .. 2590 */
+    temp_x100 = 2500 + (counter % 10) * 10;   // 2500 .. 2590
+    /* hum: 50.00 .. 53.80 in steps of 0.20 -> x100: 5000 .. 5380 */
+    hum_x100  = 5000 + (counter % 20) * 20;   // 5000 .. 5380
+
+    int t_int = temp_x100 / 100;
+    int t_frac = temp_x100 % 100;
+    int h_int = hum_x100 / 100;
+    int h_frac = hum_x100 % 100;
+    
+    logger_->info("{}", __func__);
+    // todo: send the temperature/humidity data to the server
 }
 
 void App::handle_motion_sensor_triggered()

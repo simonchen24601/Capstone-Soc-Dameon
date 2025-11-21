@@ -70,12 +70,12 @@ int PeripheralBroker::get_camera_image()
     return PERIPHERAL_STATUS_OK;
 }
 
-int PeripheralBroker::init_mcu()
+int PeripheralBroker::init_mcu(const std::function<void(const std::vector<uint8_t>&)>& read_callback)
 {
     logger_->info("Initializing camera");
     dev_mcu_ = std::make_shared<MCUInterface>();
     auto config = ConfigService::get_instance();
-    int ret = dev_mcu_->init(config->mcu_device_, config->mcu_baudrate_);
+    int ret = dev_mcu_->init(config->mcu_device_, config->mcu_baudrate_, read_callback);
     if (ret != 0) {
         logger_->error("MCUInterface init failed");
         return PERIPHERAL_STATUS_ERROR;

@@ -15,18 +15,20 @@ class MCUInterface {
 public:
     MCUInterface();
     ~MCUInterface();
-    int init(const std::string& device, int baudrate);
+    int init(const std::string& device, int baudrate, const std::function<void(const std::vector<uint8_t>&)>& cb);
     // enqueue data to be written asynchronously by the write thread
     int write_bytes_async(const std::vector<uint8_t>& data);
     // set a callback invoked when bytes are received by the read thread
-    void set_read_callback(const std::function<void(const std::vector<uint8_t>&)>& cb);
-    // stop background threads (safe to call multiple times)
+    
     void stop_background();
 
 private:
     int open_uart(const std::string& dev, int baudrate);
     ssize_t write_bytes(const void* data, size_t len);
     ssize_t read_bytes(void* data, size_t len);
+
+    void set_read_callback(const std::function<void(const std::vector<uint8_t>&)>& cb);
+    // stop background threads (safe to call multiple times)
 
 private:
     const char* LOGGER_NAME_ = "MCU";
