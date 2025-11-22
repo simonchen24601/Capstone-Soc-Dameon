@@ -3,6 +3,7 @@
 #include <thread>
 #include <string_view>
 #include "peripheralbroker.h"
+#include "networkservice.h"
 
 App::App()
     : logger_{LoggerFactory::get_instance()->get_logger(LOGGER_NAME_)}
@@ -123,25 +124,13 @@ void App::handle_mcu_timeout()
 
 void App::handle_mcu_sensor_read()
 {
-    static std::atomic counter = 0;
-    counter++;
-
-    int temp_x100 = 2500; // 25.00 * 100
-    int hum_x100 = 5000;  // 50.00 * 100
-    int counter = 0;
-
-    /* temp: 25.00 .. 25.90 in steps of 0.10 -> x100: 2500 .. 2590 */
-    temp_x100 = 2500 + (counter % 10) * 10;   // 2500 .. 2590
-    /* hum: 50.00 .. 53.80 in steps of 0.20 -> x100: 5000 .. 5380 */
-    hum_x100  = 5000 + (counter % 20) * 20;   // 5000 .. 5380
-
-    int t_int = temp_x100 / 100;
-    int t_frac = temp_x100 % 100;
-    int h_int = hum_x100 / 100;
-    int h_frac = hum_x100 % 100;
-    
     logger_->info("{}", __func__);
+    static std::atomic counter = 0;
+
     // todo: send the temperature/humidity data to the server
+    counter++;
+    float temp = 25 + (counter % 10) * 0.1f;
+    HTTPService::get_instance()->send_temperature_data(temp); 
 }
 
 void App::handle_motion_sensor_triggered()

@@ -11,8 +11,8 @@ public:
 
     /**** remote ****/
     // server backend
-    std::string server_address_;
-    int server_port_;
+    std::string server_url_;
+    std::string server_api_key_;
     bool server_ssl_enabled_;
     
     // AWS IoT Core

@@ -2,6 +2,7 @@
 #include <string>
 #include "logger.h"
 #include "configservice.h"
+#include "networkservice.h"
 #include "peripheralbroker.h"
 #include "app.h"
 
@@ -10,8 +11,8 @@ const char* DEFAULT_CONFIG_FILE = "./config.ini";
 
 void print_config(std::shared_ptr<spdlog::logger> logger, const ConfigService* cfg)
 {
-    logger->info("CONFIG: remote.server_address = {}", cfg->server_address_);
-    logger->info("CONFIG: remote.server_port = {}", cfg->server_port_);
+    logger->info("CONFIG: remote.server_url = {}", cfg->server_url_);
+    logger->info("CONFIG: remote.server_api_key length = {}", cfg->server_api_key_.length());
     logger->info("CONFIG: remote.aws_iot_core_endpoint = {}", cfg->aws_iot_core_endpoint_);
     logger->info("CONFIG: remote.aws_iot_core_serial_number = {}", cfg->aws_iot_core_serial_number_);
     logger->info("CONFIG: remote.aws_iot_ca_filepath = {}", cfg->aws_iot_ca_filepath_);
@@ -77,6 +78,17 @@ int main(int argc, char** argv)
     if (ret != PERIPHERAL_STATUS_OK) {
         logger->error("Motor Driver initialization failed");
     }
+
+    // init network service
+    auto http_service = HTTPService::get_instance();
+    http_service->init(
+        p_config->server_url_,
+        p_config->server_api_key_,
+        [](const std::string& response_body) {
+            auto logger = LoggerFactory::get_instance()->get_logger("HTTPService");
+            logger->info("Received HTTP response: {}", response_body);
+        }
+    );
 
     logger->info("bootstrap completed, launching app");
     app.run();

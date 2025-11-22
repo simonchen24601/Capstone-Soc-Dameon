@@ -12,10 +12,10 @@ int ConfigService::load_config(const std::string& config_path)
 	}
 
 	/**** remote ****/
-    // server backend
-	server_address_ = reader.Get("remote", "server_address", "");
-	server_port_ = static_cast<int>(reader.GetInteger("remote", "server_port", 443));
-	server_ssl_enabled_ = reader.GetBoolean("local", "server_ssl_enabled", true);
+	// server backend (updated field names per header: server_url_, server_api_key_path_, server_ssl_enabled_)
+	server_url_ = reader.Get("remote", "server_url", "");
+	server_api_key_ = reader.Get("remote", "server_api_key", "");
+	server_ssl_enabled_ = reader.GetBoolean("remote", "server_ssl_enabled", true);
 	// AWS IoT Core
 	aws_iot_core_endpoint_ = reader.Get("remote", "aws_iot_core_endpoint", "");
 	aws_iot_core_serial_number_ = reader.Get("remote", "aws_iot_core_serial_number", "");
