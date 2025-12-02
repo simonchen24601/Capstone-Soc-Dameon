@@ -12,6 +12,7 @@ endif()
 
 find_package(OpenCV REQUIRED)
 find_package(CURL REQUIRED)
+find_package(Boost REQUIRED)
 set(THIRD_PARTY_API "../ThirdPartyApi")
 
 set(CMAKE_CXX_FLAGS "-g -Wall")
@@ -44,17 +45,11 @@ target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE
     rt
     ${OpenCV_LIBS}
     ${CURL_LIBRARIES}
+    paho-mqtt3a
+    paho-mqtt3as
+    paho-mqttpp3
 )
 
-# Link any mqtt/spdlog libraries installed under THIRD_PARTY_API if present.
-# file(GLOB MQTT_LIBS
-#     "${THIRD_PARTY_API}/mqtt/lib/*.a"
-#     "${THIRD_PARTY_API}/mqtt/lib/*.so"
-# )
-# file(GLOB SPDLOG_LIBS
-#     "${THIRD_PARTY_API}/spdlog/lib/*.a"
-#     "${THIRD_PARTY_API}/spdlog/lib/*.so"
-# )
 if(MQTT_LIBS)
     message(STATUS "Found MQTT libs: ${MQTT_LIBS}")
     target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE ${MQTT_LIBS})

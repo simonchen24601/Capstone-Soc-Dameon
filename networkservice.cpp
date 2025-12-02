@@ -1,8 +1,10 @@
 #include "networkservice.h"
-#include <curl/curl.h>
 #include <fstream>
 #include <iomanip>
 #include <ctime>
+#include <curl/curl.h>
+#include <boost/property_tree/ptree.hpp>
+#include <boost/property_tree/json_parser.hpp>
 
 /**** NetworkService starts ****/
 
@@ -23,7 +25,7 @@ int HTTPService::init(std::string server_url, std::string api_key, const std::fu
     server_url_ = std::move(server_url);
     api_key_ = std::move(api_key);
     resp_cal_bck_ = response_callback;
-    
+
     curl_handle_ = curl_easy_init();
     if (!curl_handle_) return -1;
     // basic defaults can be set here (follow redirects, timeouts, etc.)
@@ -67,7 +69,11 @@ int HTTPService::server_request(
     curl_easy_getinfo(curl_handle_, CURLINFO_RESPONSE_CODE, &code);
     if (out_http_code) *out_http_code = code;
     if (resp_cal_bck_ && code >= 200 && code < 300) {
-        try { resp_cal_bck_(out_body); } catch (...) { /* swallow callback exceptions */ }
+        try { 
+            resp_cal_bck_(out_body); 
+        } 
+        catch (...) 
+        { /* swallow callback exceptions */ }
     }
     return 0;
 }
@@ -107,17 +113,16 @@ int HTTPService::send_temperature_data(float temperature_celsius, const std::opt
     std::string api_key_value = api_key_;
     while (!api_key_value.empty() && (api_key_value.back()=='\n' || api_key_value.back()=='\r' || api_key_value.back()==' ')) api_key_value.pop_back();
 
-    // Build JSON payload matching Flask model fields
-    // {"device_id":"RPi-5","sensor_type":"temperature","value":<float>,"timestamp":"..."}
-    std::ostringstream body;
-    body.setf(std::ios::fixed); body << std::setprecision(2);
-    body << "{";
-    body << "\"device_id\":\"" << api_key_value << "\",";
-    body << "\"sensor_type\":\"temperature\",";
-    body << "\"value\":" << temperature_celsius << ",";
-    body << "\"timestamp\":\"" << (timestamp_iso ? *timestamp_iso : now_utc_iso8601()) << "\"";
-    body << "}";
-    std::string payload = body.str();
+    // Build JSON payload using boost::property_tree
+    boost::property_tree::ptree payload_tree;
+    payload_tree.put("device_id", api_key_value);
+    payload_tree.put("sensor_type", "temperature");
+    payload_tree.put("value", temperature_celsius);
+    payload_tree.put("timestamp", (timestamp_iso ? *timestamp_iso : now_utc_iso8601()));
+    std::ostringstream body_oss;
+    boost::property_tree::write_json(body_oss, payload_tree, false); // compact JSON
+    std::string payload = body_oss.str();
+    if (!payload.empty() && (payload.back()=='\n' || payload.back()=='\r')) payload.pop_back();
 
     // Configure POST via server_request pre/post hooks
     struct curl_slist* headers = nullptr;
@@ -148,213 +153,160 @@ int HTTPService::send_temperature_data(float temperature_celsius, const std::opt
 
     int rc = server_request(url, resp, &http_code, pre, post);
     if (rc != 0) return rc;
-    return (http_code >= 200 && http_code < 300) ? 0 : static_cast<int>(http_code ? http_code : -1);
+    if (http_code >= 200 && http_code < 300) {
+        // Parse response JSON (best-effort)
+        try {
+            std::istringstream resp_iss(resp);
+            boost::property_tree::ptree resp_tree;
+            boost::property_tree::read_json(resp_iss, resp_tree);
+            auto status_opt = resp_tree.get_optional<std::string>("status");
+            if (status_opt) {
+                logger_->info("Parsed response status: {}", *status_opt);
+            }
+        } catch (...) {
+            logger_->warn("Failed to parse response JSON");
+        }
+        return 0;
+    }
+    return static_cast<int>(http_code ? http_code : -1);
 }
 
 /**** NetworkService ends ****/
 
-// /**** MQTTService starts ****/
+/**** MQTTService starts ****/
 
-// class MQTTCallback : public virtual mqtt::callback
-// {
-// public:
-//     MQTTCallback(MQTTInterface* owner) : owner_(owner) {}
-//     void connection_lost(const std::string& cause) override {
-//         if (owner_) {
-//             auto lg = owner_->get_logger();
-//             if (lg) lg->warn("MQTT connection lost: {}", cause);
-//         }
-//     }
-//     void message_arrived(mqtt::const_message_ptr msg) override {
-//         if (owner_) owner_->handle_incoming(msg->get_topic(), msg->to_string());
-//     }
-//     void delivery_complete(mqtt::delivery_token_ptr tok) override {}
+MQTTService::MQTTService()
+    : logger_{LoggerFactory::get_instance()->get_logger("MQTTService")}
+{}
 
-// private:
-//     MQTTInterface* owner_;
-// };
+MQTTService::~MQTTService()
+{
+    try { disconnect(); } catch(...) {}
+}
 
-// MQTTService::MQTTService()
-//     : logger_{LoggerFactory::get_instance()->get_logger("MQTTService")}
-// { }
+int MQTTService::init(const std::string& aws_iot_core_endpoint,
+        const std::string& client_id,
+        const std::string& cert_path,
+        const std::string& key_path,
+        const std::function<void(const std::string&, long)>& callback)
+{
+    aws_iot_core_endpoint_ = aws_iot_core_endpoint;
+    client_id_ = client_id;
+    cert_path_ = cert_path;
+    key_path_ = key_path;
+    resp_cal_bck_ = callback;
+    
+    try {
+        client_ = std::make_unique<mqtt::async_client>(aws_iot_core_endpoint_, client_id_);
 
-// MQTTService::~MQTTService()
-// {
-//     try { disconnect(); } catch(...) {}
-// }
+        mqtt::ssl_options sslopts;
+        // Treat cert_path_ as both trust store (CA) and client certificate if separate CA not provided.
+        sslopts.set_trust_store(cert_path_); // CA/root (if file contains it)
+        sslopts.set_key_store(cert_path_);   // client certificate
+        sslopts.set_private_key(key_path_);  // client private key
+        sslopts.set_enable_server_cert_auth(true);
 
-// int MQTTService::init(const std::string& broker_uri,
-//                         const std::string& client_id,
-//                         const std::string& ca_file,
-//                         const std::string& cert_file,
-//                         const std::string& key_file)
-// {
-//     try {
-//         client_ = std::make_unique<mqtt::async_client>(broker_uri, client_id);
+        conn_opts_.set_clean_session(true);
+        conn_opts_.set_automatic_reconnect(true);
+        conn_opts_.set_keep_alive_interval(20);
+        conn_opts_.set_ssl(sslopts);
 
-//         mqtt::ssl_options sslopts;
-//         sslopts.set_trust_store(ca_file);
-//         sslopts.set_key_store(cert_file);
-//         sslopts.set_private_key(key_file);
+        // Minimal callback impl
+        class CB : public virtual mqtt::callback {
+        public:
+            explicit CB(MQTTService* owner) : owner_(owner) {}
+            void connection_lost(const std::string& cause) override {
+                if (owner_) owner_->logger_->warn("MQTT connection lost: {}", cause);
+                owner_->connected_.store(false);
+            }
+            void message_arrived(mqtt::const_message_ptr msg) override {
+                if (owner_) owner_->handle_incoming(msg->get_topic(), msg->to_string());
+            }
+            void delivery_complete(mqtt::delivery_token_ptr) override {}
+        private:
+            MQTTService* owner_;
+        };
+        client_->set_callback(*new CB(this)); // leaking small object intentionally; acceptable for daemon lifetime
+        return 0;
+    } catch (const std::exception& e) {
+        logger_->error("MQTT init failed: {}", e.what());
+        return -1;
+    }
+}
 
-//         conn_opts_.set_clean_session(false);
-//         conn_opts_.set_ssl(sslopts);
+int MQTTService::connect()
+{
+    try {
+        if (!client_) return -1;
+        auto tok = client_->connect(conn_opts_);
+        tok->wait();
+        connected_.store(true);
+        logger_->info("MQTT connected");
+        return 0;
+    } catch (const std::exception& e) {
+        logger_->error("MQTT connect failed: {}", e.what());
+        return -1;
+    }
+}
 
-//         auto cb = std::make_shared<MQTTCallback>(this);
-//         client_->set_callback(*cb);
+int MQTTService::disconnect()
+{
+    try {
+        if (client_ && connected_.load()) {
+            client_->disconnect()->wait();
+            connected_.store(false);
+            logger_->info("MQTT disconnected");
+        }
+        return 0;
+    } catch (const std::exception& e) {
+        logger_->error("MQTT disconnect failed: {}", e.what());
+        return -1;
+    }
+}
 
-//         return 0;
-//     } catch (const std::exception& e) {
-//         logger_->error("MQTT init failed: {}", e.what());
-//         return -1;
-//     }
-// }
 
-// int MQTTService::connect()
-// {
-//     try {
-//         if (!client_) return -1;
-//         client_->connect(conn_opts_)->wait();
-//         connected_.store(true);
-//         logger_->info("MQTT connected");
-//         return 0;
-//     } catch (const std::exception& e) {
-//         logger_->error("MQTT connect failed: {}", e.what());
-//         return -1;
-//     }
-// }
+int MQTTService::publish(const std::string& topic, const std::string& payload, int qos)
+{
+    try {
+        if (!client_ || !connected_.load()) return -1;
+        auto msg = mqtt::make_message(topic, payload);
+        msg->set_qos(qos);
+        client_->publish(msg)->wait();
+        logger_->info("MQTT published topic='{}' bytes={} qos={}", topic, payload.size(), qos);
+        return 0;
+    } catch (const std::exception& e) {
+        logger_->error("MQTT publish failed: {}", e.what());
+        return -1;
+    }
+}
 
-// int MQTTService::disconnect()
-// {
-//     try {
-//         if (client_ && connected_.load()) {
-//             client_->disconnect()->wait();
-//             connected_.store(false);
-//             logger_->info("MQTT disconnected");
-//         }
-//         return 0;
-//     } catch (const std::exception& e) {
-//         logger_->error("MQTT disconnect failed: {}", e.what());
-//         return -1;
-//     }
-// }
+int MQTTService::subscribe_ack(const std::string& request_topic, const std::string& response_topic)
+{
+    try {
+        if (!client_ || !connected_.load()) return -1;
+        response_topic_ = response_topic;
+        client_->subscribe(request_topic, 1)->wait();
+        logger_->info("MQTT subscribed to {} (ack topic: {})", request_topic, response_topic_);
+        return 0;
+    } catch (const std::exception& e) {
+        logger_->error("MQTT subscribe failed: {}", e.what());
+        return -1;
+    }
+}
 
-// int MQTTService::publish(const std::string& topic, const std::string& payload, int qos)
-// {
-//     try {
-//         if (!client_ || !connected_.load()) return -1;
-//         auto msg = mqtt::make_message(topic, payload);
-//         msg->set_qos(qos);
-//         client_->publish(msg)->wait();
-//         return 0;
-//     } catch (const std::exception& e) {
-//         logger_->error("MQTT publish failed: {}", e.what());
-//         return -1;
-//     }
-// }
+void MQTTService::handle_incoming(const std::string& topic, const std::string& payload)
+{
+    logger_->info("[SUB] {} -> {}", topic, payload);
+    if (response_topic_.empty()) return;
+    try {
+        // Build simple ACK JSON
+        std::ostringstream oss;
+        oss << "{\"ack\":\"ACK\",\"timestamp\":" << static_cast<long>(time(nullptr)) << "}";
+        publish(response_topic_, oss.str(), 1);
+        logger_->info("ACK published to {}", response_topic_);
+    } catch (const std::exception& e) {
+        logger_->error("Failed to publish ACK: {}", e.what());
+    }
+}
 
-// int MQTTService::subscribe_ack(const std::string& request_topic, const std::string& response_topic)
-// {
-//     try {
-//         if (!client_ || !connected_.load()) return -1;
-//         response_topic_ = response_topic;
-//         client_->subscribe(request_topic, 1)->wait();
-//         logger_->info("Subscribed to {}", request_topic);
-//         return 0;
-//     } catch (const std::exception& e) {
-//         logger_->error("MQTT subscribe failed: {}", e.what());
-//         return -1;
-//     }
-// }
-
-// bool MQTTService::parse_nmea_latlon(const std::string& line, std::string &out_lat, std::string &out_lon)
-// {
-//     // naive: support GGA and RMC
-//     try {
-//         if (line.size() < 6) return false;
-//         std::string type = line.substr(3,3);
-//         std::vector<std::string> f;
-//         std::istringstream ss(line);
-//         std::string token;
-//         while (std::getline(ss, token, ',')) f.push_back(token);
-
-//         auto convert = [](const std::string& dm, const std::string& hemi)->std::string{
-//             if (dm.empty()) return std::string();
-//             // dm = ddmm.mmmm or dddmm.mmmm
-//             double val = std::stod(dm);
-//             int deg = static_cast<int>(val / 100);
-//             double minutes = val - deg*100;
-//             double dec = deg + minutes/60.0;
-//             if (hemi == "S" || hemi == "W") dec = -dec;
-//             char buf[64];
-//             snprintf(buf, sizeof(buf), "%.6f", dec);
-//             return std::string(buf);
-//         };
-
-//         if (type == "GGA") {
-//             if (f.size() > 5) {
-//                 out_lat = convert(f[2], f[3]);
-//                 out_lon = convert(f[4], f[5]);
-//                 return !out_lat.empty() && !out_lon.empty();
-//             }
-//         } else if (type == "RMC") {
-//             if (f.size() > 6) {
-//                 out_lat = convert(f[3], f[4]);
-//                 out_lon = convert(f[5], f[6]);
-//                 return !out_lat.empty() && !out_lon.empty();
-//             }
-//         }
-//     } catch (...) { }
-//     return false;
-// }
-
-// void MQTTService::handle_incoming(const std::string& topic, const std::string& payload)
-// {
-//     logger_->info("[SUB] Received message on {}: {}", topic, payload);
-//     if (response_topic_.empty()) return;
-//     try {
-//         // simple JSON construction without external dependency
-//         std::ostringstream oss;
-//         oss << "{\"ack\":\"ACK\",\"timestamp\":" << static_cast<long>(time(nullptr)) << "}";
-//         publish(response_topic_, oss.str(), 1);
-//         logger_->info("[PUB] ACK sent to {}", response_topic_);
-//     } catch (const std::exception& e) {
-//         logger_->error("Failed to send ACK: {}", e.what());
-//     }
-// }
-
-// int MQTTService::publish_gps_file(const std::string& topic, const std::string& file_path, double publish_period_sec)
-// {
-//     std::ifstream ifs(file_path);
-//     if (!ifs.is_open()) {
-//         logger_->error("Failed to open GPS file: {}", file_path);
-//         return -1;
-//     }
-//     std::string line;
-//     int count = 1;
-//     while (std::getline(ifs, line)) {
-//         if (line.empty()) continue;
-//         std::string lat, lon;
-//         if (parse_nmea_latlon(line, lat, lon)) {
-//             // construct JSON manually to avoid external dependency
-//             std::ostringstream oss;
-//             oss << "{"
-//                 << "\"count\":" << count << ","
-//                 << "\"app\":\"GROUP2\",";
-//             oss << "\"timestamp\":" << static_cast<long>(time(nullptr)) << ",";
-//             oss << "\"latitude\":\"" << lat << "\",";
-//             oss << "\"longitude\":\"" << lon << "\"";
-//             oss << "}";
-//             std::string payload = oss.str();
-//             publish(topic, payload, 1);
-//             logger_->info("Published GPS: {}", payload);
-//             count++;
-//         } else {
-//             logger_->warn("Skipped unparsable NMEA: {}", line);
-//         }
-//         std::this_thread::sleep_for(std::chrono::duration<double>(publish_period_sec));
-//     }
-//     return 0;
-// }
-
-// /**** MQTTService end ****/
+/**** MQTTService end ****/

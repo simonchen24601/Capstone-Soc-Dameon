@@ -18,11 +18,11 @@ Raspberry Pi 5 (SoC) Dameon Service for Capstone Project of the Embedded System 
 
 all compiled standalone libs should be put into the `../ThirdPartyApi` dir
 
-### Setup OpenSSL / OpenCV / CURL
+### Setup Boost / OpenSSL / OpenCV / CURL
 
 Using system default, as for debian based system:
 ```bash
-apt install libssl-dev libopencv-dev libcurl4-openssl-dev
+apt install libssl-dev libopencv-dev libcurl4-openssl-dev libboost-all-dev
 ```
 
 ### Setup spdlog

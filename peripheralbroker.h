@@ -2,14 +2,11 @@
 #include <cstdint>
 #include <variant>
 #include <string>
+#include <memory>
+// linux heaeders
 #include <termios.h>
 #include <fcntl.h>
-// #include <opencv2/opencv.hpp>
-#include <mqtt/async_client.h>
 #include "logger.h"
-#include <memory>
-
-// peripheral class declarations are moved to dedicated headers under peripherals/
 #include "msg_callback.h"
 #include "motor_driver_interface.h"
 #include "mcu_interface.h"
@@ -25,10 +22,6 @@ enum peripheral_status_t {
 enum MCU_msg_t {
     MCU_MSG_HEARTBEAT,
 };
-
-// moved MsgCallback, MotorDriverInterface, MCUInterface and CameraMicrophoneInterface
-// into separate headers under peripherals/ to keep this file focused on the
-// PeripheralBroker and higher-level compositions.
 
 class PeripheralBroker : public SingletonT<PeripheralBroker>
 {

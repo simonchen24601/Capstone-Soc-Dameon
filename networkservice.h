@@ -1,3 +1,5 @@
+// Network service interfaces: lightweight HTTP and MQTT wrappers.
+// Keep implementation details in networkservice.cpp; header stays minimal.
 #pragma once
 
 #include <sstream>
@@ -8,28 +10,30 @@
 #include <mutex>
 #include <optional>
 // third-party
-// #include <mqtt/async_client.h>
+#include <mqtt/async_client.h>
 #include <curl/curl.h>
 #include "logger.h"
 #include "util.hpp"
 
+// HTTPService: simple singleton wrapper around libcurl for GET/POST.
 class HTTPService : public SingletonT<HTTPService> {
     friend class SingletonT<HTTPService>;
 public:
     HTTPService();
     ~HTTPService();
 
-    // Initialize the HTTP client (returns 0 on success)
+    // Initialize HTTP client (returns 0 on success)
     int init(std::string server_url, std::string api_key, const std::function<void(const std::string&)>& response_callback);
+    // POST temperature reading as JSON.
     int send_temperature_data(float temperature_celsius, const std::optional<std::string>& timestamp_iso = std::nullopt);
+    // Placeholder for image data upload (not implemented yet).
+    int send_camera_image_data(const std::vector<uint8_t>& image_data, const std::optional<std::string>& timestamp_iso = std::nullopt) 
+        {return -1;};
 
 private:
-    // Perform a simple HTTP GET request to `url` and return response body.
-    // If `out_http_code` is provided, the HTTP status code will be written.
-    // Returns 0 on success, non-zero on error.
+    // Basic GET request; writes body and optional status code; 0 on success.
     int server_request(const std::string& url, std::string& out_body, long* out_http_code = nullptr);
-    // Extended variant allowing callers to configure CURL options (e.g., headers, POST fields)
-    // under the same internal lock before the request, and clean up/reset after.
+    // Extended request with pre/post lambdas to set/reset curl options.
     int server_request(
         const std::string& url,
         std::string& out_body,
@@ -51,46 +55,44 @@ private:
     std::function<void(const std::string&)> resp_cal_bck_;
 };
 
-// class MQTTService : public SingletonT<MQTTService> {
-//     friend class SingletonT<MQTTService>;
-// public:
-//     MQTTService();
-//     ~MQTTService();
+// MQTTService: AWS IoT Core style MQTT client singleton.
+class MQTTService : public SingletonT<MQTTService> {
+    friend class SingletonT<MQTTService>;
+public:
+    MQTTService();
+    ~MQTTService();
 
-//     // Initialize the HTTP client (returns 0 on success).
-//     // Optional callback will be invoked for responses: callback(body, http_code).
-//     int init(const std::function<void(const std::string&, long)>& callback = nullptr);
+    // Configure client (endpoint, certs, callback); returns 0 on success.
+    int init(
+        const std::string& aws_iot_core_endpoint,
+        const std::string& client_id,
+        const std::string& cert_path,
+        const std::string& key_path,
+        const std::function<void(const std::string&, long)>& callback);
+    
+    // Establish MQTT connection.
+    int connect();
+    // Graceful disconnect.
+    int disconnect();      
+    // Blocking publish.
+    int publish(const std::string& topic, const std::string& payload, int qos = 1); 
+    // Sub + auto ACK.
+    int subscribe_ack(const std::string& request_topic, const std::string& response_topic); 
+    // Internal callback hook.    
+    void handle_incoming(const std::string& topic, const std::string& payload); 
 
-//     // Perform a simple HTTP GET request to `url` and return response body.
-//     // If `out_http_code` is provided, the HTTP status code will be written.
-//     // Returns 0 on success, non-zero on error.
-//     int server_request(const std::string& url, std::string& out_body, long* out_http_code = nullptr);
-//     int connect();
-//     int disconnect();
-
-//     // publish a payload (blocking)
-//     int publish(const std::string& topic, const std::string& payload, int qos = 1);
-
-//     // Subscribe to request_topic and automatically publish ACKs to response_topic
-//     int subscribe_ack(const std::string& request_topic, const std::string& response_topic);
-
-//     // Read GPS (NMEA) lines from file and publish parsed JSON messages periodically
-//     int publish_gps_file(const std::string& topic, const std::string& file_path, double publish_period_sec);
-// public:
-//     // expose a minimal getter so callback objects can log via the same logger
-//     std::shared_ptr<spdlog::logger> get_logger() { return logger_; }
-
-//     // message handler called from callback (made public so the callback can invoke it)
-//     void handle_incoming(const std::string& topic, const std::string& payload);
-
-// private:
-//     const char* LOGGER_NAME_ = "MQTTService";
-//     std::shared_ptr<spdlog::logger> logger_;
-//     std::unique_ptr<mqtt::async_client> client_;
-//     mqtt::connect_options conn_opts_;
-//     std::string response_topic_;
-//     std::atomic_bool connected_{false};
-//     // parse minimal NMEA (GGA or RMC) and return pair lat,lon as strings or empty
-//     static bool parse_nmea_latlon(const std::string& line, std::string &out_lat, std::string &out_lon);
-
-// };
+private:
+    const char* LOGGER_NAME_ = "MQTTService";
+    std::shared_ptr<spdlog::logger> logger_;
+    // AWS IoT Core endpoint and creds
+    std::string aws_iot_core_endpoint_;
+    std::string client_id_;
+    std::string cert_path_;
+    std::string key_path_;
+    //
+    std::function<void(const std::string&, long)> resp_cal_bck_;
+    std::unique_ptr<mqtt::async_client> client_;
+    mqtt::connect_options conn_opts_;
+    std::string response_topic_;
+    std::atomic_bool connected_{false};
+};
