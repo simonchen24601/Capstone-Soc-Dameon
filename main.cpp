@@ -69,7 +69,7 @@ int main(int argc, char** argv)
         logger->error("Camera initialization failed");
     }
 
-    auto cb = static_cast<void(*)(const std::vector<uint8_t>& msg)>(&App::on_MCU_data);
+    auto cb = static_cast<void(*)(const std::vector<MCUInterface::DecodedMessage>&)>(&App::on_MCU_data);
     ret = peripheral_broker->init_mcu(cb);
     if (ret != PERIPHERAL_STATUS_OK) {
         logger->error("MCU initialization failed");

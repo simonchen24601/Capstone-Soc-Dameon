@@ -43,7 +43,7 @@ public:
     PeripheralBroker();
     int init_camera();
     // int init_microphone();
-    int init_mcu(const std::function<void(const std::vector<uint8_t>&)>& read_callback);
+    int init_mcu(const std::function<void(const std::vector<MCUInterface::DecodedMessage>&)>& read_callback);
     int init_motor_driver();
 
     // camera interfaces

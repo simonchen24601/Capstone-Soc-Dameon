@@ -70,7 +70,7 @@ int PeripheralBroker::get_camera_image()
     return PERIPHERAL_STATUS_OK;
 }
 
-int PeripheralBroker::init_mcu(const std::function<void(const std::vector<uint8_t>&)>& read_callback)
+int PeripheralBroker::init_mcu(const std::function<void(const std::vector<MCUInterface::DecodedMessage>&)>& read_callback)
 {
     logger_->info("Initializing camera");
     dev_mcu_ = std::make_shared<MCUInterface>();

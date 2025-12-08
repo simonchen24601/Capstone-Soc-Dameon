@@ -7,17 +7,18 @@
 #include <functional>
 #include <chrono>
 #include "logger.h"
+#include "peripheralbroker.h"
 
 class App {
 public:
     App();
     void run();
     void stop();
-    static void on_MCU_data(const std::vector<uint8_t>&);    // static wrapper for MCU data callback
+    static void on_MCU_data(const std::vector<MCUInterface::DecodedMessage>&);    // static wrapper for MCU data callback
 
 private:
     // MCU callbacks
-    inline void on_MCU_data_impl(const std::vector<uint8_t>& msg); // called on MCU read, not thread-safe, message may be partial
+    inline void on_MCU_data_impl(const std::vector<MCUInterface::DecodedMessage>&); // called on MCU read, not thread-safe, message may be partial
     void on_MCU_msg() {};   // complete message received from MCU
     void on_MCU_motion_sensor_triggered() {};
     void on_MCU_proximity_sensor_read() {};

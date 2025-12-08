@@ -101,12 +101,12 @@ void App::stop()
     exit_flag_ = true;
 }
 
-void App::on_MCU_data(const std::vector<uint8_t>& msg)
+void App::on_MCU_data(const std::vector<MCUInterface::DecodedMessage>& msg)
 {
     SingletonT<App>::get_instance()->on_MCU_data_impl(msg);
 }
 
-void App::on_MCU_data_impl(const std::vector<uint8_t>& msg)
+void App::on_MCU_data_impl(const std::vector<MCUInterface::DecodedMessage>& msg)
 {
     if (!msg.empty()) {
         std::string_view sv(reinterpret_cast<const char*>(msg.data()), msg.size());

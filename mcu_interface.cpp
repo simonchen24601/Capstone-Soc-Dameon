@@ -8,6 +8,8 @@
 #include <string.h>
 #include <stdlib.h>
 #include <chrono>
+#include <sstream>
+
 
 MCUInterface::MCUInterface()
     : logger_{LoggerFactory::get_instance()->get_logger(LOGGER_NAME_)}
@@ -85,7 +87,7 @@ static inline int baudrate_to_constant(int baud)
     }
 }
 
-int MCUInterface::init(const std::string& device, int baudrate, const std::function<void(const std::vector<uint8_t>&)>& cb)
+int MCUInterface::init(const std::string& device, int baudrate, const std::function<void(const std::vector<DecodedMessage>&)>& cb)
 {
     // std::string mode = cfg->mcu_mode_;
     // for (auto &c : mode) c = static_cast<char>(toupper(c));
@@ -98,7 +100,7 @@ int MCUInterface::init(const std::string& device, int baudrate, const std::funct
     dev_fd_ = open_uart(device, baudrate_to_constant(baudrate));
     if (dev_fd_ < 0) return -1;
 
-    // set read callback
+    // set decoded read callback
     set_read_callback(cb);
 
     // start background threads for read/write
@@ -128,15 +130,42 @@ int MCUInterface::init(const std::string& device, int baudrate, const std::funct
     read_thread_ = std::thread([this]() {
         const size_t BUF_SZ = 256;
         std::vector<uint8_t> buf(BUF_SZ);
+        std::string carry; // hold unfinished token between reads
         while (running_.load()) {
             ssize_t r = read_bytes(buf.data(), buf.size());
             if (r > 0) {
-                std::vector<uint8_t> got(buf.begin(), buf.begin() + r);
-                if (read_callback_) {
-                    try { read_callback_(got); } catch (const std::exception& e) {
-                        logger_->error("read callback exception: {}", e.what());
-                    } catch (...) {
-                        logger_->error("read callback unknown exception");
+                // append new data
+                carry.append(reinterpret_cast<char*>(buf.data()), static_cast<size_t>(r));
+                // extract complete tokens separated by whitespace
+                std::vector<std::string> tokens;
+                std::string current;
+                for (char ch : carry) {
+                    if (std::isspace(static_cast<unsigned char>(ch))) {
+                        if (!current.empty()) {
+                            tokens.push_back(current);
+                            current.clear();
+                        }
+                    } else {
+                        current.push_back(ch);
+                    }
+                }
+                // whatever remains in current is unfinished; keep as new carry
+                carry = current;
+
+                if (!tokens.empty() && read_callback_) {
+                    // decode each complete token
+                    std::vector<DecodedMessage> all;
+                    all.reserve(tokens.size());
+                    for (auto &t : tokens) {
+                        auto msgs = decode_messages(t);
+                        all.insert(all.end(), msgs.begin(), msgs.end());
+                    }
+                    if (!all.empty()) {
+                        try { read_callback_(all); } catch (const std::exception& e) {
+                            logger_->error("read callback exception: {}", e.what());
+                        } catch (...) {
+                            logger_->error("read callback unknown exception");
+                        }
                     }
                 }
             } else {
@@ -183,11 +212,11 @@ int MCUInterface::write_bytes_async(const std::vector<uint8_t>& data)
     return 0;
 }
 
-void MCUInterface::set_read_callback(const std::function<void(const std::vector<uint8_t>&)>& cb)
+void MCUInterface::set_read_callback(const std::function<void(const std::vector<DecodedMessage>&)>& cb)
 {
     read_callback_ = cb;
 }
-
+ 
 void MCUInterface::stop_background()
 {
     if (!running_.load()) {
@@ -269,4 +298,43 @@ int MCUInterface::open_uart(const std::string& dev, int baudrate)
 
     logger_->info("MCU connected, opened {} at baudrate {}, fd {}", dev, baudrate, fd);
     return fd;
+}
+
+static inline void trim_inplace(std::string& s)
+{
+    auto notspace = [](unsigned char c){ return !std::isspace(c); };
+    auto b = std::find_if(s.begin(), s.end(), notspace);
+    auto e = std::find_if(s.rbegin(), s.rend(), notspace).base();
+    if (b < e) s = std::string(b, e); else s.clear();
+}
+
+std::vector<MCUInterface::DecodedMessage> MCUInterface::decode_messages(const std::string& input)
+{
+    std::vector<DecodedMessage> out;
+    std::istringstream iss(input);
+    std::string token;
+    while (iss >> token) { // whitespace-separated messages
+        trim_inplace(token);
+        if (token.empty()) continue;
+        DecodedMessage dm;
+        // split by ';'
+        size_t start = 0;
+        while (start <= token.size()) {
+            size_t pos = token.find(';', start);
+            std::string pair = token.substr(start, pos == std::string::npos ? std::string::npos : pos - start);
+            if (!pair.empty()) {
+                size_t eq = pair.find('=');
+                if (eq != std::string::npos) {
+                    std::string key = pair.substr(0, eq);
+                    std::string val = pair.substr(eq + 1);
+                    if (key == "dev") dm.dev = val;
+                    dm.fields[key] = val;
+                }
+            }
+            if (pos == std::string::npos) break;
+            start = pos + 1;
+        }
+        if (!dm.dev.empty() || !dm.fields.empty()) out.push_back(std::move(dm));
+    }
+    return out;
 }
