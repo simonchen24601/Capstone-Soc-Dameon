@@ -20,5 +20,6 @@ private:
     ~LoggerFactory() = default;
 
 private:
+    spdlog::level::level_enum default_level_;
 	std::vector<spdlog::sink_ptr> m_sinks;
 };

@@ -53,10 +53,10 @@ int LoggerFactory::init()
 	}
 
 	// set global default level by storing parsed level for later use in get_logger
-	spdlog::level::level_enum default_level = parse_level(level_str);
+	default_level_ = parse_level(level_str);
 
 	// Optionally set the global level too
-	spdlog::set_level(default_level);
+	spdlog::set_level(default_level_);
 
 	return 0;
 }
@@ -69,7 +69,7 @@ std::shared_ptr<spdlog::logger> LoggerFactory::get_logger(const std::string &nam
 		combined_logger = std::make_shared<spdlog::logger>(name, std::begin(m_sinks), std::end(m_sinks));
 		spdlog::register_logger(combined_logger);
 		// respect global/default level already set in init()
-		combined_logger->flush_on(spdlog::level::info);
+		combined_logger->flush_on(default_level_);
 	}
 
 	return combined_logger;

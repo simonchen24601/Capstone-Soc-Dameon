@@ -15,11 +15,21 @@ public:
     App();
     void run();
     void stop();
-    static void on_MCU_data(const std::vector<MCUInterface::DecodedMessage>&);    // static wrapper for MCU data callback
+    void handle_MCU_data(const std::vector<MCUInterface::DecodedMessage>& msg) { on_MCU_data_impl(msg); }
 
 private:
+    enum event_t {
+        EVENT_IDLE,
+        EVENT_MCU_HEARTBEAT_TIMEOUT,
+        EVENT_MCU_MOTION_SENSOR_TRIGGERED,
+        EVENT_MCU_PROXIMITY_SENSOR_TRIGGERED,
+        EVENT_MCU_TEMPRATURE_SENSOR_READ,   // temperature sensor read serve as heartbeat
+        EVENT_SERVER_STREAMING_BEGIN,
+        EVENT_SERVER_STREAMING_END
+    };
+
     // MCU callbacks
-    inline void on_MCU_data_impl(const std::vector<MCUInterface::DecodedMessage>&); // called on MCU read, not thread-safe, message may be partial
+    void on_MCU_data_impl(const std::vector<MCUInterface::DecodedMessage>&); // called on MCU read, not thread-safe, message may be partial
     void on_MCU_motion_sensor_triggered(const MCUInterface::DecodedMessage&);
     void on_MCU_proximity_sensor_read(const MCUInterface::DecodedMessage&);
     void on_MCU_temperature_sensor_read(const MCUInterface::DecodedMessage&);
@@ -32,6 +42,10 @@ private:
     void handle_server_streaming_begin();
     void handle_server_streaming_end();
 
+    // enqueue helpers
+    inline void enqueue_low_priority(event_t ev);
+    inline void enqueue_high_priority(event_t ev);
+
 private:
     static constexpr int TEMPRATURE_SENSOR_READ_INTERVAL_SEC_ = 5;
 
@@ -40,16 +54,6 @@ private:
 
     float mcu_temperature_celsius_{0.0f};
     float mcu_humidity_percent_{0.0f};
-
-    enum event_t {
-        EVENT_IDLE,
-        EVENT_MCU_HEARTBEAT_TIMEOUT,
-        EVENT_MCU_MOTION_SENSOR_TRIGGERED,
-        EVENT_MCU_PROXIMITY_SENSOR_TRIGGERED,
-        EVENT_MCU_TEMPRATURE_SENSOR_READ,   // temperature sensor read serve as heartbeat
-        EVENT_SERVER_STREAMING_BEGIN,
-        EVENT_SERVER_STREAMING_END
-    };
 
     struct TimedEvent {
         std::chrono::steady_clock::time_point timestamp;

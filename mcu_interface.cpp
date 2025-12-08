@@ -89,14 +89,6 @@ static inline int baudrate_to_constant(int baud)
 
 int MCUInterface::init(const std::string& device, int baudrate, const std::function<void(const std::vector<DecodedMessage>&)>& cb)
 {
-    // std::string mode = cfg->mcu_mode_;
-    // for (auto &c : mode) c = static_cast<char>(toupper(c));
-    // if (mode == "USB") {
-    //     logger_->info("MCU init: configured in USB mode, skipping UART open");
-    //     dev_fd_ = -1;
-    //     return 0;
-    // }
-
     dev_fd_ = open_uart(device, baudrate_to_constant(baudrate));
     if (dev_fd_ < 0) return -1;
 

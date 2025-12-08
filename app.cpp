@@ -12,10 +12,21 @@ App::App()
 
 void App::run()
 {
-    bool busy_flag;
-    uint32_t count = 0;
+    auto event_name = [&](event_t e) -> const char* {
+        switch(e) {
+            case EVENT_IDLE: return "EVENT_IDLE";
+            case EVENT_MCU_HEARTBEAT_TIMEOUT: return "EVENT_MCU_HEARTBEAT_TIMEOUT";
+            case EVENT_MCU_MOTION_SENSOR_TRIGGERED: return "EVENT_MCU_MOTION_SENSOR_TRIGGERED";
+            case EVENT_MCU_PROXIMITY_SENSOR_TRIGGERED: return "EVENT_MCU_PROXIMITY_SENSOR_TRIGGERED";
+            case EVENT_MCU_TEMPRATURE_SENSOR_READ: return "EVENT_MCU_TEMPRATURE_SENSOR_READ";
+            case EVENT_SERVER_STREAMING_BEGIN: return "EVENT_SERVER_STREAMING_BEGIN";
+            case EVENT_SERVER_STREAMING_END: return "EVENT_SERVER_STREAMING_END";
+            default: return "EVENT_UNKNOWN";
+        }
+    };
 
     auto handle_event = [&](int event) {
+        logger_->info("event_loop id={} name={}", event, event_name(static_cast<event_t>(event)));
         switch(event) {
             case EVENT_MCU_HEARTBEAT_TIMEOUT: {
                 logger_->critical("MCU heartbeat timeout");
@@ -36,11 +47,13 @@ void App::run()
 
     auto pull_event_queue = [&]() {
         bool is_busy = false;
+        // pull all high-priority events
         while(true) {
             event_t ev;
             {
                 std::lock_guard<std::mutex> lk(high_priority_event_mutex_);
-                if (high_priority_event_queue_.empty()) break;
+                if (high_priority_event_queue_.empty()) 
+                    break;
                 ev = high_priority_event_queue_.front();
                 high_priority_event_queue_.pop();
             }
@@ -48,15 +61,24 @@ void App::run()
             is_busy = true;
         }
 
+        // pull single low-priority event
         {
-            std::lock_guard<std::mutex> lk(low_priority_event_mutex_);
-            if(!low_priority_event_queue_.empty()) {
-                event_t ev = low_priority_event_queue_.front();
-                low_priority_event_queue_.pop();
+            event_t ev;
+            bool have_ev = false;
+            {
+                std::lock_guard<std::mutex> lk(low_priority_event_mutex_);
+                if(!low_priority_event_queue_.empty()) {
+                    ev = low_priority_event_queue_.front();
+                    low_priority_event_queue_.pop();
+                    have_ev = true;
+                }
+            }
+            if (have_ev) {
                 handle_event(ev);
                 is_busy = true;
             }
         }
+
         return is_busy;
     };
 
@@ -81,20 +103,26 @@ void App::run()
         return is_busy;
     };
 
-    // debug only: enqueue some events
-    // high_priority_event_queue_.push(EVENT_MCU_TEMPRATURE_SENSOR_READ);
-    // high_priority_event_queue_.push(EVENT_MCU_MOTION_SENSOR_TRIGGERED);
-    
+    // debug: enqueue some events
+    // enqueue_low_priority(EVENT_MCU_TEMPRATURE_SENSOR_READ);
+    enqueue_high_priority(EVENT_MCU_MOTION_SENSOR_TRIGGERED);
+
+    bool busy_flag;
+    uint32_t count = 0;
     logger_->info("main event loop begin");
     while(!exit_flag_) {
         busy_flag = false;
         switch(count % 8) {
             case 0:
             case 1: {
-                check_time_event() ? busy_flag = true : busy_flag;
+                if(check_time_event()) {
+                    busy_flag = true;
+                }
             }
             default: {
-                pull_event_queue() ? busy_flag = true : busy_flag;
+                if(pull_event_queue()) {
+                    busy_flag = true;
+                }
             }
         }
 
@@ -109,11 +137,6 @@ void App::run()
 void App::stop()
 {
     exit_flag_ = true;
-}
-
-void App::on_MCU_data(const std::vector<MCUInterface::DecodedMessage>& msg)
-{
-    SingletonT<App>::get_instance()->on_MCU_data_impl(msg);
 }
 
 void App::on_MCU_data_impl(const std::vector<MCUInterface::DecodedMessage>& msg)
@@ -152,31 +175,34 @@ void App::on_MCU_data_impl(const std::vector<MCUInterface::DecodedMessage>& msg)
 
 void App::on_MCU_temperature_sensor_read(const MCUInterface::DecodedMessage& msg)
 {
-    logger_->debug("Temperature sensor reading received");
+    logger_->info("Temperature sensor reading received");
     mcu_temperature_celsius_ = msg.fields.count("temperature") ? std::stof(msg.fields.at("temperature")) : -999.0f;
     mcu_humidity_percent_ = msg.fields.count("humidity") ? std::stof(msg.fields.at("humidity")) : -999.0f;
-    {
-        std::lock_guard<std::mutex> lk(low_priority_event_mutex_);
-        low_priority_event_queue_.push(EVENT_MCU_TEMPRATURE_SENSOR_READ);
-    }
+    enqueue_low_priority(EVENT_MCU_TEMPRATURE_SENSOR_READ);
 }
 
 void App::on_MCU_motion_sensor_triggered(const MCUInterface::DecodedMessage& msg)
 {
-    logger_->debug("Motion sensor triggered");
     if(msg.fields.count("motion_detected") && std::stoi(msg.fields.at("motion_detected")) != 0) {
-        std::lock_guard<std::mutex> lk(high_priority_event_mutex_);
-        high_priority_event_queue_.push(EVENT_MCU_MOTION_SENSOR_TRIGGERED);
+        enqueue_high_priority(EVENT_MCU_MOTION_SENSOR_TRIGGERED);
     }
 }
 
 void App::on_MCU_proximity_sensor_read(const MCUInterface::DecodedMessage& msg)
 {
-    logger_->debug("Proximity sensor reading received");
-    {
-        std::lock_guard<std::mutex> lk(high_priority_event_mutex_);
-        high_priority_event_queue_.push(EVENT_MCU_PROXIMITY_SENSOR_TRIGGERED);
-    }
+    enqueue_high_priority(EVENT_MCU_PROXIMITY_SENSOR_TRIGGERED);
+}
+
+void App::enqueue_low_priority(event_t ev)
+{
+    std::lock_guard<std::mutex> lk(low_priority_event_mutex_);
+    low_priority_event_queue_.push(ev);
+}
+
+void App::enqueue_high_priority(event_t ev)
+{
+    std::lock_guard<std::mutex> lk(high_priority_event_mutex_);
+    high_priority_event_queue_.push(ev);
 }
 
 void App::handle_mcu_timeout()
@@ -186,8 +212,11 @@ void App::handle_mcu_timeout()
 
 void App::handle_mcu_sensor_read()
 {
-    logger_->info("{}", __func__);
-    HTTPService::get_instance()->send_temperature_data(mcu_temperature_celsius_, mcu_humidity_percent_); 
+    logger_->info("[{}]", __func__);
+    logger_->info("  Temperature: {:.2f} C, Humidity: {:.2f} %", mcu_temperature_celsius_, mcu_humidity_percent_);
+
+    // todo send data to server
+    // HTTPService::get_instance()->send_temperature_data(mcu_temperature_celsius_, mcu_humidity_percent_); 
 }
 
 void App::handle_motion_sensor_triggered()
@@ -200,6 +229,8 @@ void App::handle_motion_sensor_triggered()
     else {
         logger_->info("[{}] camera image captured", __func__);
     }
+
+    // todo send alert to server
 }
 
 void App::handle_proximity_sensor_triggered()
