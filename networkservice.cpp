@@ -100,7 +100,7 @@ static std::string now_utc_iso8601()
     return oss.str();
 }
 
-int HTTPService::send_temperature_data(float temperature_celsius, const std::optional<std::string>& timestamp_iso)
+int HTTPService::send_temperature_data(float temperature_celsius, float humidity_percent, const std::optional<std::string>& timestamp_iso)
 {
     if (!curl_handle_) return -1;
 
@@ -117,7 +117,8 @@ int HTTPService::send_temperature_data(float temperature_celsius, const std::opt
     boost::property_tree::ptree payload_tree;
     payload_tree.put("device_id", api_key_value);
     payload_tree.put("sensor_type", "temperature");
-    payload_tree.put("value", temperature_celsius);
+    payload_tree.put("temperature", temperature_celsius);
+    payload_tree.put("humidity", humidity_percent);
     payload_tree.put("timestamp", (timestamp_iso ? *timestamp_iso : now_utc_iso8601()));
     std::ostringstream body_oss;
     boost::property_tree::write_json(body_oss, payload_tree, false); // compact JSON

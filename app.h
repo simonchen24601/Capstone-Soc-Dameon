@@ -6,6 +6,7 @@
 #include <ctime>
 #include <functional>
 #include <chrono>
+#include <mutex>
 #include "logger.h"
 #include "peripheralbroker.h"
 
@@ -19,11 +20,9 @@ public:
 private:
     // MCU callbacks
     inline void on_MCU_data_impl(const std::vector<MCUInterface::DecodedMessage>&); // called on MCU read, not thread-safe, message may be partial
-    void on_MCU_msg() {};   // complete message received from MCU
-    void on_MCU_motion_sensor_triggered() {};
-    void on_MCU_proximity_sensor_read() {};
-    void on_MCU_temperature_sensor_read() {};
-    void on_MCU_humidity_sensor_read() {};
+    void on_MCU_motion_sensor_triggered(const MCUInterface::DecodedMessage&);
+    void on_MCU_proximity_sensor_read(const MCUInterface::DecodedMessage&);
+    void on_MCU_temperature_sensor_read(const MCUInterface::DecodedMessage&);
 
     // event handlers
     void handle_mcu_timeout();
@@ -38,6 +37,9 @@ private:
 
     const char* LOGGER_NAME_ = "App";
     std::shared_ptr<spdlog::logger> logger_;
+
+    float mcu_temperature_celsius_{0.0f};
+    float mcu_humidity_percent_{0.0f};
 
     enum event_t {
         EVENT_IDLE,
@@ -61,13 +63,17 @@ private:
     };
 
     /**** event queues ****/
+
     std::priority_queue<
         TimedEvent,
         std::vector<TimedEvent>,
         TimedEventCompare
     > timed_event_queue_;
+    std::mutex timed_event_mutex_;
     std::queue<event_t> high_priority_event_queue_;
+    std::mutex high_priority_event_mutex_;
     std::queue<event_t> low_priority_event_queue_;
+    std::mutex low_priority_event_mutex_;
 
     bool exit_flag_;
 };

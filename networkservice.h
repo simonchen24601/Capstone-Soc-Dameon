@@ -25,7 +25,7 @@ public:
     // Initialize HTTP client (returns 0 on success)
     int init(std::string server_url, std::string api_key, const std::function<void(const std::string&)>& response_callback);
     // POST temperature reading as JSON.
-    int send_temperature_data(float temperature_celsius, const std::optional<std::string>& timestamp_iso = std::nullopt);
+    int send_temperature_data(float temperature_celsius, float humidity_percent, const std::optional<std::string>& timestamp_iso = std::nullopt);
     // Placeholder for image data upload (not implemented yet).
     int send_camera_image_data(const std::vector<uint8_t>& image_data, const std::optional<std::string>& timestamp_iso = std::nullopt) 
         {return -1;};
@@ -46,9 +46,9 @@ private:
     std::string server_url_;
     std::string api_key_;
     // API endpoints
-    const char* API_URL_DATA_ = "/iot/data";
-    const char* API_URL_LOG_  = "/iot/log";
-    const char* API_URL_COMMAND_ = "/iot/command";
+    const char* API_URL_DATA_ = "/sensor-data";
+    const char* API_URL_LOG_  = "/logs";
+    const char* API_URL_COMMAND_ = "/command";
     std::shared_ptr<spdlog::logger> logger_;
     CURL* curl_handle_;
     std::mutex curl_mutex_;
