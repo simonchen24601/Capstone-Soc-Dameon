@@ -100,51 +100,72 @@ static std::string now_utc_iso8601()
     return oss.str();
 }
 
-int HTTPService::send_temperature_data(float temperature_celsius, float humidity_percent, const std::optional<std::string>& timestamp_iso)
+int HTTPService::send_temperature_data(float temperature_celsius, float humidity_percent)
 {
     if (!curl_handle_) return -1;
+    // Use api_key_ as device_id per prior design
+    std::string device_id = api_key_;
+    while (!device_id.empty() && (device_id.back()=='\n' || device_id.back()=='\r' || device_id.back()==' ')) device_id.pop_back();
 
-    // Determine URL: post to log endpoint
+    std::string response;
+    int rc = post_temperature(device_id,
+                              static_cast<double>(temperature_celsius),
+                              static_cast<double>(humidity_percent),
+                              response);
+    if (rc == 0) {
+        // Best-effort parse/log
+        try {
+            std::istringstream iss(response);
+            boost::property_tree::ptree resp_tree;
+            boost::property_tree::read_json(iss, resp_tree);
+            auto id_opt = resp_tree.get_optional<int>("id");
+            auto ts_opt = resp_tree.get_optional<std::string>("timestamp");
+            if (id_opt || ts_opt) {
+                logger_->info("/temperature created id={} ts={}", id_opt.value_or(-1), ts_opt.value_or(""));
+            }
+        } catch (...) {
+            logger_->warn("Failed to parse /temperature response JSON");
+        }
+    }
+    return rc;
+}
+
+int HTTPService::post_temperature(const std::string& device_id,
+                                  double temperature_celsius,
+                                  double humidity_percent,
+                                  std::string &out_response_body)
+{
+    if (!curl_handle_) return -1;
     std::string url = server_url_;
     if (!url.empty() && url.back() == '/') url.pop_back();
-    url += std::string(API_URL_DATA_);
+    url += std::string(API_URL_TEMPERATURE_);
 
-    // Prepare API key header if present
-    std::string api_key_value = api_key_;
-    while (!api_key_value.empty() && (api_key_value.back()=='\n' || api_key_value.back()=='\r' || api_key_value.back()==' ')) api_key_value.pop_back();
-
-    // Build JSON payload using boost::property_tree
     boost::property_tree::ptree payload_tree;
-    payload_tree.put("device_id", api_key_value);
-    payload_tree.put("sensor_type", "temperature");
-    payload_tree.put("temperature", temperature_celsius);
-    payload_tree.put("humidity", humidity_percent);
-    payload_tree.put("timestamp", (timestamp_iso ? *timestamp_iso : now_utc_iso8601()));
+    payload_tree.put("device_id", device_id);
+    payload_tree.put("temperature_celsius", temperature_celsius);
+    payload_tree.put("humidity_percent", humidity_percent);
     std::ostringstream body_oss;
-    boost::property_tree::write_json(body_oss, payload_tree, false); // compact JSON
+    boost::property_tree::write_json(body_oss, payload_tree, false);
     std::string payload = body_oss.str();
     if (!payload.empty() && (payload.back()=='\n' || payload.back()=='\r')) payload.pop_back();
 
-    // Configure POST via server_request pre/post hooks
     struct curl_slist* headers = nullptr;
     std::string resp;
     long http_code = 0;
 
     auto pre = [&](CURL* h){
         headers = curl_slist_append(headers, "Content-Type: application/json");
-        if (!api_key_value.empty()) {
-            std::string api_header = std::string("X-API-KEY: ") + api_key_value;
+        if (!api_key_.empty()) {
+            std::string api_header = std::string("X-API-Key: ") + api_key_;
             headers = curl_slist_append(headers, api_header.c_str());
         }
         curl_easy_setopt(h, CURLOPT_HTTPHEADER, headers);
         curl_easy_setopt(h, CURLOPT_POST, 1L);
         curl_easy_setopt(h, CURLOPT_POSTFIELDS, payload.c_str());
         curl_easy_setopt(h, CURLOPT_POSTFIELDSIZE, payload.size());
-        // ensure response goes into resp string from this scope
         curl_easy_setopt(h, CURLOPT_WRITEDATA, &resp);
     };
     auto post = [&](CURL* h){
-        // reset POST-related options to avoid affecting subsequent requests
         curl_easy_setopt(h, CURLOPT_POST, 0L);
         curl_easy_setopt(h, CURLOPT_POSTFIELDS, nullptr);
         curl_easy_setopt(h, CURLOPT_POSTFIELDSIZE, 0L);
@@ -153,23 +174,56 @@ int HTTPService::send_temperature_data(float temperature_celsius, float humidity
     };
 
     int rc = server_request(url, resp, &http_code, pre, post);
+    out_response_body = resp;
     if (rc != 0) return rc;
-    if (http_code >= 200 && http_code < 300) {
-        // Parse response JSON (best-effort)
-        try {
-            std::istringstream resp_iss(resp);
-            boost::property_tree::ptree resp_tree;
-            boost::property_tree::read_json(resp_iss, resp_tree);
-            auto status_opt = resp_tree.get_optional<std::string>("status");
-            if (status_opt) {
-                logger_->info("Parsed response status: {}", *status_opt);
-            }
-        } catch (...) {
-            logger_->warn("Failed to parse response JSON");
+    return (http_code >= 200 && http_code < 300) ? 0 : static_cast<int>(http_code ? http_code : -1);
+}
+
+int HTTPService::post_log(const std::string& device_id,
+                          const std::string& message,
+                          std::string &out_response_body)
+{
+    if (!curl_handle_) return -1;
+    std::string url = server_url_;
+    if (!url.empty() && url.back() == '/') url.pop_back();
+    url += std::string(API_URL_LOG_);
+
+    boost::property_tree::ptree payload_tree;
+    payload_tree.put("device_id", device_id);
+    payload_tree.put("message", message);
+    std::ostringstream body_oss;
+    boost::property_tree::write_json(body_oss, payload_tree, false);
+    std::string payload = body_oss.str();
+    if (!payload.empty() && (payload.back()=='\n' || payload.back()=='\r')) payload.pop_back();
+
+    struct curl_slist* headers = nullptr;
+    std::string resp;
+    long http_code = 0;
+
+    auto pre = [&](CURL* h){
+        headers = curl_slist_append(headers, "Content-Type: application/json");
+        if (!api_key_.empty()) {
+            std::string api_header = std::string("X-API-Key: ") + api_key_;
+            headers = curl_slist_append(headers, api_header.c_str());
         }
-        return 0;
-    }
-    return static_cast<int>(http_code ? http_code : -1);
+        curl_easy_setopt(h, CURLOPT_HTTPHEADER, headers);
+        curl_easy_setopt(h, CURLOPT_POST, 1L);
+        curl_easy_setopt(h, CURLOPT_POSTFIELDS, payload.c_str());
+        curl_easy_setopt(h, CURLOPT_POSTFIELDSIZE, payload.size());
+        curl_easy_setopt(h, CURLOPT_WRITEDATA, &resp);
+    };
+    auto post = [&](CURL* h){
+        curl_easy_setopt(h, CURLOPT_POST, 0L);
+        curl_easy_setopt(h, CURLOPT_POSTFIELDS, nullptr);
+        curl_easy_setopt(h, CURLOPT_POSTFIELDSIZE, 0L);
+        curl_easy_setopt(h, CURLOPT_HTTPHEADER, nullptr);
+        if (headers) { curl_slist_free_all(headers); headers = nullptr; }
+    };
+
+    int rc = server_request(url, resp, &http_code, pre, post);
+    out_response_body = resp;
+    if (rc != 0) return rc;
+    return (http_code >= 200 && http_code < 300) ? 0 : static_cast<int>(http_code ? http_code : -1);
 }
 
 /**** NetworkService ends ****/

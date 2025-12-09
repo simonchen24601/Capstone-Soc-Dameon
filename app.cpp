@@ -175,7 +175,6 @@ void App::on_MCU_data_impl(const std::vector<MCUInterface::DecodedMessage>& msg)
 
 void App::on_MCU_temperature_sensor_read(const MCUInterface::DecodedMessage& msg)
 {
-    logger_->info("Temperature sensor reading received");
     mcu_temperature_celsius_ = msg.fields.count("temperature") ? std::stof(msg.fields.at("temperature")) : -999.0f;
     mcu_humidity_percent_ = msg.fields.count("humidity") ? std::stof(msg.fields.at("humidity")) : -999.0f;
     enqueue_low_priority(EVENT_MCU_TEMPRATURE_SENSOR_READ);
@@ -215,8 +214,8 @@ void App::handle_mcu_sensor_read()
     logger_->info("[{}]", __func__);
     logger_->info("  Temperature: {:.2f} C, Humidity: {:.2f} %", mcu_temperature_celsius_, mcu_humidity_percent_);
 
-    // todo send data to server
-    // HTTPService::get_instance()->send_temperature_data(mcu_temperature_celsius_, mcu_humidity_percent_); 
+    // todo: async send data to server
+    HTTPService::get_instance()->send_temperature_data(mcu_temperature_celsius_, mcu_humidity_percent_); 
 }
 
 void App::handle_motion_sensor_triggered()
@@ -230,7 +229,7 @@ void App::handle_motion_sensor_triggered()
         logger_->info("[{}] camera image captured", __func__);
     }
 
-    // todo send alert to server
+    // todo: send alert to server
 }
 
 void App::handle_proximity_sensor_triggered()
