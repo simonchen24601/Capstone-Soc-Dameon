@@ -45,15 +45,15 @@ target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE
     rt
     ${OpenCV_LIBS}
     ${CURL_LIBRARIES}
-    paho-mqtt3a
-    paho-mqtt3as
-    paho-mqttpp3
+    # paho-mqtt3a
+    # paho-mqtt3as
+    # paho-mqttpp3
 )
 
-if(MQTT_LIBS)
-    message(STATUS "Found MQTT libs: ${MQTT_LIBS}")
-    target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE ${MQTT_LIBS})
-endif()
+# if(MQTT_LIBS)
+#     message(STATUS "Found MQTT libs: ${MQTT_LIBS}")
+#     target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE ${MQTT_LIBS})
+# endif()
 if(SPDLOG_LIBS)
     message(STATUS "Found spdlog libs: ${SPDLOG_LIBS}")
     target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE ${SPDLOG_LIBS})

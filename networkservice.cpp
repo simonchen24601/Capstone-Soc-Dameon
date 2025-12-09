@@ -275,138 +275,138 @@ int HTTPService::send_camera_image_data(const std::vector<uint8_t>& image_data)
 /**** NetworkService ends ****/
 /**** MQTTService starts ****/
 
-MQTTService::MQTTService()
-    : logger_{LoggerFactory::get_instance()->get_logger("MQTTService")}
-{}
+// MQTTService::MQTTService()
+//     : logger_{LoggerFactory::get_instance()->get_logger("MQTTService")}
+// {}
 
-MQTTService::~MQTTService()
-{
-    try { disconnect(); } catch(...) {}
-}
+// MQTTService::~MQTTService()
+// {
+//     try { disconnect(); } catch(...) {}
+// }
 
-int MQTTService::init(const std::string& aws_iot_core_endpoint,
-        const std::string& client_id,
-        const std::string& cert_path,
-        const std::string& key_path,
-        const std::function<void(const std::string&, long)>& callback)
-{
-    aws_iot_core_endpoint_ = aws_iot_core_endpoint;
-    client_id_ = client_id;
-    cert_path_ = cert_path;
-    key_path_ = key_path;
-    resp_cal_bck_ = callback;
+// int MQTTService::init(const std::string& aws_iot_core_endpoint,
+//         const std::string& client_id,
+//         const std::string& cert_path,
+//         const std::string& key_path,
+//         const std::function<void(const std::string&, long)>& callback)
+// {
+//     aws_iot_core_endpoint_ = aws_iot_core_endpoint;
+//     client_id_ = client_id;
+//     cert_path_ = cert_path;
+//     key_path_ = key_path;
+//     resp_cal_bck_ = callback;
     
-    try {
-        client_ = std::make_unique<mqtt::async_client>(aws_iot_core_endpoint_, client_id_);
+//     try {
+//         client_ = std::make_unique<mqtt::async_client>(aws_iot_core_endpoint_, client_id_);
 
-        mqtt::ssl_options sslopts;
-        // Treat cert_path_ as both trust store (CA) and client certificate if separate CA not provided.
-        sslopts.set_trust_store(cert_path_); // CA/root (if file contains it)
-        sslopts.set_key_store(cert_path_);   // client certificate
-        sslopts.set_private_key(key_path_);  // client private key
-        sslopts.set_enable_server_cert_auth(true);
+//         mqtt::ssl_options sslopts;
+//         // Treat cert_path_ as both trust store (CA) and client certificate if separate CA not provided.
+//         sslopts.set_trust_store(cert_path_); // CA/root (if file contains it)
+//         sslopts.set_key_store(cert_path_);   // client certificate
+//         sslopts.set_private_key(key_path_);  // client private key
+//         sslopts.set_enable_server_cert_auth(true);
 
-        conn_opts_.set_clean_session(true);
-        conn_opts_.set_automatic_reconnect(true);
-        conn_opts_.set_keep_alive_interval(20);
-        conn_opts_.set_ssl(sslopts);
+//         conn_opts_.set_clean_session(true);
+//         conn_opts_.set_automatic_reconnect(true);
+//         conn_opts_.set_keep_alive_interval(20);
+//         conn_opts_.set_ssl(sslopts);
 
-        // Minimal callback impl
-        class CB : public virtual mqtt::callback {
-        public:
-            explicit CB(MQTTService* owner) : owner_(owner) {}
-            void connection_lost(const std::string& cause) override {
-                if (owner_) owner_->logger_->warn("MQTT connection lost: {}", cause);
-                owner_->connected_.store(false);
-            }
-            void message_arrived(mqtt::const_message_ptr msg) override {
-                if (owner_) owner_->handle_incoming(msg->get_topic(), msg->to_string());
-            }
-            void delivery_complete(mqtt::delivery_token_ptr) override {}
-        private:
-            MQTTService* owner_;
-        };
-        client_->set_callback(*new CB(this)); // leaking small object intentionally; acceptable for daemon lifetime
-        return 0;
-    } catch (const std::exception& e) {
-        logger_->error("MQTT init failed: {}", e.what());
-        return -1;
-    }
-}
+//         // Minimal callback impl
+//         class CB : public virtual mqtt::callback {
+//         public:
+//             explicit CB(MQTTService* owner) : owner_(owner) {}
+//             void connection_lost(const std::string& cause) override {
+//                 if (owner_) owner_->logger_->warn("MQTT connection lost: {}", cause);
+//                 owner_->connected_.store(false);
+//             }
+//             void message_arrived(mqtt::const_message_ptr msg) override {
+//                 if (owner_) owner_->handle_incoming(msg->get_topic(), msg->to_string());
+//             }
+//             void delivery_complete(mqtt::delivery_token_ptr) override {}
+//         private:
+//             MQTTService* owner_;
+//         };
+//         client_->set_callback(*new CB(this)); // leaking small object intentionally; acceptable for daemon lifetime
+//         return 0;
+//     } catch (const std::exception& e) {
+//         logger_->error("MQTT init failed: {}", e.what());
+//         return -1;
+//     }
+// }
 
-int MQTTService::connect()
-{
-    try {
-        if (!client_) return -1;
-        auto tok = client_->connect(conn_opts_);
-        tok->wait();
-        connected_.store(true);
-        logger_->info("MQTT connected");
-        return 0;
-    } catch (const std::exception& e) {
-        logger_->error("MQTT connect failed: {}", e.what());
-        return -1;
-    }
-}
+// int MQTTService::connect()
+// {
+//     try {
+//         if (!client_) return -1;
+//         auto tok = client_->connect(conn_opts_);
+//         tok->wait();
+//         connected_.store(true);
+//         logger_->info("MQTT connected");
+//         return 0;
+//     } catch (const std::exception& e) {
+//         logger_->error("MQTT connect failed: {}", e.what());
+//         return -1;
+//     }
+// }
 
-int MQTTService::disconnect()
-{
-    try {
-        if (client_ && connected_.load()) {
-            client_->disconnect()->wait();
-            connected_.store(false);
-            logger_->info("MQTT disconnected");
-        }
-        return 0;
-    } catch (const std::exception& e) {
-        logger_->error("MQTT disconnect failed: {}", e.what());
-        return -1;
-    }
-}
+// int MQTTService::disconnect()
+// {
+//     try {
+//         if (client_ && connected_.load()) {
+//             client_->disconnect()->wait();
+//             connected_.store(false);
+//             logger_->info("MQTT disconnected");
+//         }
+//         return 0;
+//     } catch (const std::exception& e) {
+//         logger_->error("MQTT disconnect failed: {}", e.what());
+//         return -1;
+//     }
+// }
 
 
-int MQTTService::publish(const std::string& topic, const std::string& payload, int qos)
-{
-    try {
-        if (!client_ || !connected_.load()) return -1;
-        auto msg = mqtt::make_message(topic, payload);
-        msg->set_qos(qos);
-        client_->publish(msg)->wait();
-        logger_->info("MQTT published topic='{}' bytes={} qos={}", topic, payload.size(), qos);
-        return 0;
-    } catch (const std::exception& e) {
-        logger_->error("MQTT publish failed: {}", e.what());
-        return -1;
-    }
-}
+// int MQTTService::publish(const std::string& topic, const std::string& payload, int qos)
+// {
+//     try {
+//         if (!client_ || !connected_.load()) return -1;
+//         auto msg = mqtt::make_message(topic, payload);
+//         msg->set_qos(qos);
+//         client_->publish(msg)->wait();
+//         logger_->info("MQTT published topic='{}' bytes={} qos={}", topic, payload.size(), qos);
+//         return 0;
+//     } catch (const std::exception& e) {
+//         logger_->error("MQTT publish failed: {}", e.what());
+//         return -1;
+//     }
+// }
 
-int MQTTService::subscribe_ack(const std::string& request_topic, const std::string& response_topic)
-{
-    try {
-        if (!client_ || !connected_.load()) return -1;
-        response_topic_ = response_topic;
-        client_->subscribe(request_topic, 1)->wait();
-        logger_->info("MQTT subscribed to {} (ack topic: {})", request_topic, response_topic_);
-        return 0;
-    } catch (const std::exception& e) {
-        logger_->error("MQTT subscribe failed: {}", e.what());
-        return -1;
-    }
-}
+// int MQTTService::subscribe_ack(const std::string& request_topic, const std::string& response_topic)
+// {
+//     try {
+//         if (!client_ || !connected_.load()) return -1;
+//         response_topic_ = response_topic;
+//         client_->subscribe(request_topic, 1)->wait();
+//         logger_->info("MQTT subscribed to {} (ack topic: {})", request_topic, response_topic_);
+//         return 0;
+//     } catch (const std::exception& e) {
+//         logger_->error("MQTT subscribe failed: {}", e.what());
+//         return -1;
+//     }
+// }
 
-void MQTTService::handle_incoming(const std::string& topic, const std::string& payload)
-{
-    logger_->info("[SUB] {} -> {}", topic, payload);
-    if (response_topic_.empty()) return;
-    try {
-        // Build simple ACK JSON
-        std::ostringstream oss;
-        oss << "{\"ack\":\"ACK\",\"timestamp\":" << static_cast<long>(time(nullptr)) << "}";
-        publish(response_topic_, oss.str(), 1);
-        logger_->info("ACK published to {}", response_topic_);
-    } catch (const std::exception& e) {
-        logger_->error("Failed to publish ACK: {}", e.what());
-    }
-}
+// void MQTTService::handle_incoming(const std::string& topic, const std::string& payload)
+// {
+//     logger_->info("[SUB] {} -> {}", topic, payload);
+//     if (response_topic_.empty()) return;
+//     try {
+//         // Build simple ACK JSON
+//         std::ostringstream oss;
+//         oss << "{\"ack\":\"ACK\",\"timestamp\":" << static_cast<long>(time(nullptr)) << "}";
+//         publish(response_topic_, oss.str(), 1);
+//         logger_->info("ACK published to {}", response_topic_);
+//     } catch (const std::exception& e) {
+//         logger_->error("Failed to publish ACK: {}", e.what());
+//     }
+// }
 
 /**** MQTTService end ****/
