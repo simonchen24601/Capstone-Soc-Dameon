@@ -2,6 +2,8 @@
 #include <chrono>
 #include <thread>
 #include <string_view>
+#include <fstream>
+#include <vector>
 #include "peripheralbroker.h"
 #include "networkservice.h"
 
@@ -227,6 +229,27 @@ void App::handle_motion_sensor_triggered()
     }
     else {
         logger_->info("[{}] camera image captured", __func__);
+
+        // Read the saved image and POST to server
+        const char* image_path = "./logs/capture.jpg";
+        std::ifstream ifs(image_path, std::ios::binary);
+        if (!ifs.is_open()) {
+            logger_->error("[{}] cannot open image file {}", __func__, image_path);
+            return;
+        }
+        std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
+        ifs.close();
+        if (bytes.empty()) {
+            logger_->error("[{}] image file {} is empty", __func__, image_path);
+            return;
+        }
+
+        int rc = HTTPService::get_instance()->send_camera_image_data(bytes);
+        if (rc != 0) {
+            logger_->error("[{}] upload screenshot failed: rc={}", __func__, rc);
+        } else {
+            logger_->info("[{}] screenshot uploaded successfully", __func__);
+        }
     }
 
     // todo: send alert to server
@@ -234,7 +257,7 @@ void App::handle_motion_sensor_triggered()
 
 void App::handle_proximity_sensor_triggered()
 {
-    logger_->info("[{}] not implemented", __func__);
+    logger_->info("[{}] motor speed cap not implemented", __func__);
 }
 
 void App::handle_server_streaming_begin()

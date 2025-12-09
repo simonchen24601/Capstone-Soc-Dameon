@@ -26,17 +26,10 @@ public:
     int init(std::string server_url, std::string api_key, const std::function<void(const std::string&)>& response_callback);
     // POST temperature reading as JSON.
     int send_temperature_data(float temperature_celsius, float humidity_percent);
-    // Placeholder for image data upload (not implemented yet).
-    int send_camera_image_data(const std::vector<uint8_t>& image_data, const std::optional<std::string>& timestamp_iso = std::nullopt) 
-        {return -1;};
+    // POST camera image as multipart/form-data.
+    int send_camera_image_data(const std::vector<uint8_t>& image_data);
 
 private:
-    // POST /temperature { device_id, temperature_celsius, humidity_percent }
-    int post_temperature(const std::string& device_id,
-                         double temperature_celsius,
-                         double humidity_percent,
-                         std::string &out_response_body);
-
     int post_log(const std::string& device_id,
                  const std::string& message,
                  std::string &out_response_body);
@@ -58,6 +51,7 @@ private:
     // API endpoints
     const char* API_URL_LOG_  = "/logs";
     const char* API_URL_TEMPERATURE_ = "/sensor/temperature";
+    const char* API_URL_SCREENSHOT_ = "/sensor/screenshot";
     const char* API_URL_COMMAND_ = "/command";
     std::shared_ptr<spdlog::logger> logger_;
     CURL* curl_handle_;

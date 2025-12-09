@@ -80,6 +80,14 @@ int CameraMicrophoneInterface::get_image()
     // todo: update the saved path from the ConfigService
     std::filesystem::create_directories("./logs");
     std::string out = "./logs/capture.jpg";
+    // remove previous file if it exists to avoid stale content
+    try {
+        if (std::filesystem::exists(out)) {
+            std::filesystem::remove(out);
+        }
+    } catch (const std::exception& e) {
+        logger_->warn("Failed to remove existing image {}: {}", out, e.what());
+    }
     try {
         if (!cv::imwrite(out, frame)) {
             logger_->error("Failed to write image to {}", out);

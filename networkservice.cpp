@@ -84,22 +84,6 @@ int HTTPService::server_request(const std::string& url, std::string& out_body, l
     return server_request(url, out_body, out_http_code, nullptr, nullptr);
 }
 
-static std::string now_utc_iso8601()
-{
-    using namespace std::chrono;
-    auto now = system_clock::now();
-    auto t = system_clock::to_time_t(now);
-    std::tm tm{};
-#if defined(_WIN32)
-    gmtime_s(&tm, &t);
-#else
-    gmtime_r(&t, &tm);
-#endif
-    std::ostringstream oss;
-    oss << std::put_time(&tm, "%Y-%m-%dT%H:%M:%SZ");
-    return oss.str();
-}
-
 int HTTPService::send_temperature_data(float temperature_celsius, float humidity_percent)
 {
     if (!curl_handle_) return -1;
@@ -107,43 +91,14 @@ int HTTPService::send_temperature_data(float temperature_celsius, float humidity
     std::string device_id = api_key_;
     while (!device_id.empty() && (device_id.back()=='\n' || device_id.back()=='\r' || device_id.back()==' ')) device_id.pop_back();
 
-    std::string response;
-    int rc = post_temperature(device_id,
-                              static_cast<double>(temperature_celsius),
-                              static_cast<double>(humidity_percent),
-                              response);
-    if (rc == 0) {
-        // Best-effort parse/log
-        try {
-            std::istringstream iss(response);
-            boost::property_tree::ptree resp_tree;
-            boost::property_tree::read_json(iss, resp_tree);
-            auto id_opt = resp_tree.get_optional<int>("id");
-            auto ts_opt = resp_tree.get_optional<std::string>("timestamp");
-            if (id_opt || ts_opt) {
-                logger_->info("/temperature created id={} ts={}", id_opt.value_or(-1), ts_opt.value_or(""));
-            }
-        } catch (...) {
-            logger_->warn("Failed to parse /temperature response JSON");
-        }
-    }
-    return rc;
-}
-
-int HTTPService::post_temperature(const std::string& device_id,
-                                  double temperature_celsius,
-                                  double humidity_percent,
-                                  std::string &out_response_body)
-{
-    if (!curl_handle_) return -1;
     std::string url = server_url_;
     if (!url.empty() && url.back() == '/') url.pop_back();
     url += std::string(API_URL_TEMPERATURE_);
 
     boost::property_tree::ptree payload_tree;
     payload_tree.put("device_id", device_id);
-    payload_tree.put("temperature_celsius", temperature_celsius);
-    payload_tree.put("humidity_percent", humidity_percent);
+    payload_tree.put("temperature_celsius", static_cast<double>(temperature_celsius));
+    payload_tree.put("humidity_percent", static_cast<double>(humidity_percent));
     std::ostringstream body_oss;
     boost::property_tree::write_json(body_oss, payload_tree, false);
     std::string payload = body_oss.str();
@@ -174,9 +129,24 @@ int HTTPService::post_temperature(const std::string& device_id,
     };
 
     int rc = server_request(url, resp, &http_code, pre, post);
-    out_response_body = resp;
     if (rc != 0) return rc;
-    return (http_code >= 200 && http_code < 300) ? 0 : static_cast<int>(http_code ? http_code : -1);
+
+    if (http_code >= 200 && http_code < 300) {
+        try {
+            std::istringstream iss(resp);
+            boost::property_tree::ptree resp_tree;
+            boost::property_tree::read_json(iss, resp_tree);
+            auto id_opt = resp_tree.get_optional<int>("id");
+            auto ts_opt = resp_tree.get_optional<std::string>("timestamp");
+            if (id_opt || ts_opt) {
+                logger_->info("/temperature created id={} ts={}", id_opt.value_or(-1), ts_opt.value_or(""));
+            }
+        } catch (...) {
+            logger_->warn("Failed to parse /temperature response JSON");
+        }
+        return 0;
+    }
+    return static_cast<int>(http_code ? http_code : -1);
 }
 
 int HTTPService::post_log(const std::string& device_id,
@@ -226,8 +196,83 @@ int HTTPService::post_log(const std::string& device_id,
     return (http_code >= 200 && http_code < 300) ? 0 : static_cast<int>(http_code ? http_code : -1);
 }
 
-/**** NetworkService ends ****/
+// Implement screenshot upload (multipart/form-data)
+int HTTPService::send_camera_image_data(const std::vector<uint8_t>& image_data)
+{
+    if (!curl_handle_) return -1;
+    std::string url = server_url_;
+    if (!url.empty() && url.back() == '/') url.pop_back();
+    url += std::string(API_URL_SCREENSHOT_);
 
+    // Resolve device_id from API key (trim whitespace)
+    std::string device_id = api_key_;
+    while (!device_id.empty() && (device_id.back()=='\n' || device_id.back()=='\r' || device_id.back()==' ')) device_id.pop_back();
+    // Infer format from magic bytes (default jpg)
+    const char* format = "jpg";
+    if (image_data.size() >= 8) {
+        const unsigned char* d = reinterpret_cast<const unsigned char*>(image_data.data());
+        // PNG
+        if (d[0]==0x89 && d[1]==0x50 && d[2]==0x4E && d[3]==0x47 && d[4]==0x0D && d[5]==0x0A && d[6]==0x1A && d[7]==0x0A) {
+            format = "png";
+        }
+        // JPEG
+        else if (d[0]==0xFF && d[1]==0xD8 && d[2]==0xFF) {
+            format = "jpg";
+        }
+    }
+
+    std::string resp;
+    long http_code = 0;
+
+    struct curl_slist* headers = nullptr;
+    curl_mime* mime = nullptr;
+    curl_mimepart* part = nullptr;
+
+    auto pre = [&](CURL* h){
+        // Header: X-API-Key
+        if (!api_key_.empty()) {
+            std::string api_header = std::string("X-API-Key: ") + api_key_;
+            headers = curl_slist_append(headers, api_header.c_str());
+            curl_easy_setopt(h, CURLOPT_HTTPHEADER, headers);
+        }
+
+        // Build multipart form
+        mime = curl_mime_init(h);
+        // device_id field
+        part = curl_mime_addpart(mime);
+        curl_mime_name(part, "device_id");
+        curl_mime_data(part, device_id.c_str(), CURL_ZERO_TERMINATED);
+        // format field
+        part = curl_mime_addpart(mime);
+        curl_mime_name(part, "format");
+        curl_mime_data(part, format, CURL_ZERO_TERMINATED);
+        // image file field (from memory)
+        part = curl_mime_addpart(mime);
+        curl_mime_name(part, "image");
+        curl_mime_filename(part, (std::string("screenshot.") + format).c_str());
+        if (!image_data.empty()) {
+            curl_mime_data(part, reinterpret_cast<const char*>(image_data.data()), image_data.size());
+        } else {
+            curl_mime_data(part, "", 0);
+        }
+
+        curl_easy_setopt(h, CURLOPT_MIMEPOST, mime);
+        curl_easy_setopt(h, CURLOPT_URL, url.c_str());
+        curl_easy_setopt(h, CURLOPT_WRITEDATA, &resp);
+    };
+
+    auto post = [&](CURL* h){
+        (void)h;
+        if (mime) { curl_mime_free(mime); mime = nullptr; }
+        if (headers) { curl_slist_free_all(headers); headers = nullptr; }
+    };
+
+    int rc = server_request(url, resp, &http_code, pre, post);
+    if (rc != 0) return rc;
+    return (http_code >= 200 && http_code < 300) ? 0 : static_cast<int>(http_code ? http_code : -1);
+}
+
+/**** NetworkService ends ****/
 /**** MQTTService starts ****/
 
 MQTTService::MQTTService()
